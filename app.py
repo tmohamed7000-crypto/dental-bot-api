@@ -45,22 +45,19 @@ def init_db():
 
 init_db()
 
-def save_client(name, phone, service):
-    conn = sqlite3.connect("clients.db")
-    conn.execute("INSERT INTO clients (name, phone, service, status, created_at) VALUES (?, ?, ?, ?, ?)",
-                 (name, phone, service, "جديد", datetime.now().strftime("%Y-%m-%d %H:%M")))
-    conn.commit()
-    conn.close()
-
 # =========================
-# AI LOGIC
+# AI CORE (الفهم السياقي العميق)
 # =========================
 def ask_ai(user_text):
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "صنف نية المستخدم لخدمة واحدة: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). إذا كان هناك ألم اختر طوارئ. أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
+                {"role": "system", "content": """أنت مساعد استقبال ذكي في عيادة أسنان. مهمتك تحليل كلام المريض أياً كانت لغته أو ثقافته.
+                - إذا كان المريض يشتكي من أي (ألم، وجع، حساسية، كسر، عدم راحة، نزيف، ورم) -> صنفها 'طوارئ'.
+                - إذا كان المريض يسأل عن (تجميل، تحسين شكل، تفتيح لون، ابتسامة، هوليوود سمايل) -> صنفها 'تبييض' أو 'فينير' أو 'ابتسامة'.
+                - إذا كان الكلام غير واضح طبياً -> صنفها 'كشف'.
+                يجب أن تعيد JSON فقط: {"service": "اسم الخدمة باللغة العربية حصراً"}"""},
                 {"role": "user", "content": user_text}
             ]
         )
@@ -83,33 +80,41 @@ def chat():
     data = request.json
     msg = data.get("message", "")
     user_id = request.remote_addr
-    if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None, "name": None}
+    if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
-    
-    # التحقق من التحية
-    if any(x in msg.lower() for x in ["سلام", "اهلا", "hi", "hello"]):
-        return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
 
-    # معالجة الخدمة
+    # منطق التحية الذكي
+    if any(x in msg.lower() for x in ["سلام", "اهلا", "صباح", "مساء", "hi", "hello"]):
+        return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير (د. هبة عمار). ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
+
+    # منطق الحجز النهائي
+    if "final_booking:" in msg:
+        # استخراج البيانات من الرسالة المنسقة القادمة من الـ HTML
+        match = re.search(r"name: (.*) phone: (.*) service: (.*)", msg)
+        if match:
+            name, phone, service = match.groups()
+            conn = sqlite3.connect("clients.db")
+            conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
+            conn.commit()
+            conn.close()
+            # تنبيه تليجرام
+            if ADMIN_CHAT_ID:
+                requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", json={"chat_id": ADMIN_CHAT_ID, "text": f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"})
+            
+            link = SERVICES.get(service, SERVICES["كشف"])["link"]
+            user_states[user_id] = {"step": "ask_service", "service": None} # ريست للحالة
+            return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً.\nيمكنك تأكيد الحجز فوراً من هنا: {link}"})
+
+    # منطق الفهم السياقي
     if state["step"] == "ask_service":
-        service = msg if msg in SERVICES else ask_ai(msg).get("service")
+        ai_res = ask_ai(msg)
+        service = ai_res.get("service")
         if service in SERVICES:
             state["service"] = service
-            state["step"] = "ask_name"
+            state["step"] = "collect_data"
             res = SERVICES[service]
-            return jsonify({"reply": f"خدمة {service} ممتازة! السعر: {res['price']}.\nمن فضلك اكتب اسمك الثلاثي لنحجز لك استشارة 👇"})
-        return jsonify({"reply": "سلامتك! هل تريد حجز كشف طوارئ أم استفسار عن تجميل الأسنان؟", "show_services": True})
-
-    # معالجة الحجز النهائي (الاسم والهاتف يتم استلامهم من الفورم في الـ HTML)
-    if "phone:" in msg and "name:" in msg:
-        parts = msg.split(" ")
-        name = parts[1]
-        phone = parts[3]
-        save_client(name, phone, state["service"])
-        # إرسال تليجرام هنا (اختياري)
-        link = SERVICES[state["service"]]["link"]
-        user_states[user_id] = {"step": "ask_service", "service": None, "name": None}
-        return jsonify({"reply": f"تم الحجز بنجاح يا {name}! ✅\nيمكنك تأكيد الموعد الآن: {link}"})
+            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\n💰 التكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك الثلاثي ورقم موبايلك لنرتب لك الموعد؟ 👇"})
+        return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم استفسار عن خدمات التجميل؟", "show_services": True})
 
     return jsonify({"reply": "عذراً، هل يمكنك توضيح طلبك؟"})
 

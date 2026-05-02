@@ -3,33 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Optimum Care Clinic</title>
+<title>Optimum Care Clinic Chat</title>
 <style>
-    :root { --primary: #008080; --bg: #f0f2f5; }
-    body { font-family: 'Segoe UI', sans-serif; background: #e9ecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .chat-container { width: 100%; max-width: 400px; height: 620px; background: white; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-    .header { background: var(--primary); color: white; padding: 15px; text-align: center; }
+    :root { --primary: #008080; --bg: #f8f9fa; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #e9ecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .chat-container { width: 100%; max-width: 400px; height: 620px; background: white; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .header { background: var(--primary); color: white; padding: 18px; text-align: center; }
     .chat-box { flex: 1; overflow-y: auto; padding: 15px; background: var(--bg); display: flex; flex-direction: column; }
-    .msg { margin: 8px 0; padding: 12px; border-radius: 15px; max-width: 80%; font-size: 0.95rem; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .bot { background: white; align-self: flex-start; border-bottom-right-radius: 2px; }
+    .msg { margin: 8px 0; padding: 12px 16px; border-radius: 18px; max-width: 82%; font-size: 0.95rem; line-height: 1.5; }
+    .bot { background: white; align-self: flex-start; border-bottom-right-radius: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .user { background: var(--primary); color: white; align-self: flex-end; border-bottom-left-radius: 2px; }
     
-    .btn-group { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
-    .btn-group button { background: white; border: 1px solid var(--primary); color: var(--primary); padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; transition: 0.3s; }
-    .btn-group button:hover { background: var(--primary); color: white; }
-
-    .booking-form { background: white; padding: 15px; border-radius: 15px; border: 1px solid #ddd; margin-top: 10px; }
-    .booking-form input, .booking-form select { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-    .submit-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-
-    .typing { display: flex; gap: 4px; padding: 10px; background: white; border-radius: 15px; width: fit-content; margin: 5px 0; }
-    .dot { width: 6px; height: 6px; background: #888; border-radius: 50%; animation: wave 1.3s infinite; }
+    .typing { display: flex; gap: 4px; padding: 12px; background: white; border-radius: 15px; width: fit-content; margin: 5px 0; }
+    .dot { width: 6px; height: 6px; background: #adb5bd; border-radius: 50%; animation: wave 1.3s infinite; }
     .dot:nth-child(2) { animation-delay: -1.1s; }
     .dot:nth-child(3) { animation-delay: -0.9s; }
     @keyframes wave { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
 
-    .input-area { display: flex; padding: 15px; border-top: 1px solid #eee; background: white; }
-    #messageInput { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 25px; outline: none; margin-left: 10px; }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .btn-group button { background: white; border: 1px solid var(--primary); color: var(--primary); padding: 8px 14px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; transition: 0.3s; }
+    .btn-group button:hover { background: var(--primary); color: white; }
+
+    .form-box { background: white; padding: 15px; border-radius: 15px; border: 1px solid #dee2e6; margin-top: 10px; }
+    .form-box input, .form-box select { width: 100%; padding: 11px; margin: 6px 0; border: 1px solid #ced4da; border-radius: 8px; font-size: 0.9rem; }
+    .submit-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+
+    .input-area { display: flex; padding: 15px; background: white; border-top: 1px solid #eee; }
+    #messageInput { flex: 1; padding: 12px 18px; border: 1px solid #ced4da; border-radius: 25px; outline: none; margin-left: 10px; }
 </style>
 </head>
 <body>
@@ -37,19 +37,20 @@
     <div class="header"><strong>سارة - استقبال أوبتمم كير</strong></div>
     <div class="chat-box" id="chatBox"></div>
     <div class="input-area">
-        <input id="messageInput" placeholder="اكتب سؤالك هنا..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button onclick="sendMessage()" style="background:none; border:none; color:var(--primary); font-size:1.5rem; cursor:pointer;">➤</button>
+        <input id="messageInput" placeholder="اكتب استفسارك هنا..." onkeypress="if(event.key==='Enter')sendMessage()">
+        <button onclick="sendMessage()" style="background:none; border:none; color:var(--primary); font-size:1.6rem; cursor:pointer;">➤</button>
     </div>
 </div>
 
 <script>
     const chatBox = document.getElementById("chatBox");
+    let currentService = "";
 
-    function addMessage(content, type="bot", isHTML=false) {
+    function addMessage(text, type="bot", isHTML=false) {
         const div = document.createElement("div");
         div.className = `msg ${type}`;
-        if(isHTML) div.innerHTML = content;
-        else div.innerText = content;
+        if(isHTML) div.innerHTML = text;
+        else div.innerText = text;
         chatBox.appendChild(div);
         chatBox.scrollTop = chatBox.scrollHeight;
     }
@@ -64,7 +65,7 @@
     }
 
     function showServices() {
-        const services = ["تبييض", "تقويم", "زراعة", "فينير", "طوارئ", "عروسة"];
+        const services = ["تبييض الأسنان", "زراعة أسنان", "تقويم شفاف", "عرض العروسة", "حالة طوارئ"];
         const div = document.createElement("div");
         div.className = "btn-group";
         services.forEach(s => {
@@ -77,14 +78,14 @@
     }
 
     window.onload = () => {
-        addMessage("أهلاً بك في عيادة أوبتمم كير ✨\nمعك سارة، كيف يمكنني مساعدتك اليوم؟");
+        addMessage("أهلاً بك في عيادة أوبتمم كير (د. هبة عمار) ✨\nمعك سارة، كيف يمكنني مساعدتك اليوم؟");
         showServices();
     };
 
     async function sendMessage() {
         const input = document.getElementById("messageInput");
-        if(!input.value.trim()) return;
-        const msg = input.value;
+        const msg = input.value.trim();
+        if(!msg) return;
         addMessage(msg, "user");
         input.value = "";
         handleBotResponse(msg);
@@ -100,13 +101,18 @@
             const data = await res.json();
             addMessage(data.reply);
             if(data.show_services) showServices();
-            if(data.reply.includes("اكتب اسمك")) showForm();
+            if(data.reply.includes("اسمك الثلاثي")) {
+                 // استخراج اسم الخدمة من الرد لتخزينها
+                 const found = data.reply.match(/خدمة (.*)\./);
+                 if(found) currentService = found[1];
+                 showForm();
+            }
         });
     }
 
     function showForm() {
         const div = document.createElement("div");
-        div.className = "booking-form";
+        div.className = "form-box";
         div.innerHTML = `
             <input id="fName" placeholder="الاسم الثلاثي">
             <select id="fCode">
@@ -115,7 +121,7 @@
                 <option value="+971">🇦🇪 الإمارات (+971)</option>
             </select>
             <input id="fPhone" type="tel" placeholder="رقم الموبايل">
-            <button class="submit-btn" onclick="submitForm()">تأكيد الحجز ✅</button>
+            <button class="submit-btn" onclick="submitForm()">تأكيد البيانات وإرسال الطلب ✅</button>
         `;
         chatBox.appendChild(div);
         chatBox.scrollTop = chatBox.scrollHeight;
@@ -125,9 +131,9 @@
         const name = document.getElementById("fName").value;
         const phone = document.getElementById("fPhone").value;
         const code = document.getElementById("fCode").value;
-        if(name.length < 3 || phone.length < 8) return alert("بيانات ناقصة");
+        if(name.length < 3 || phone.length < 8) return alert("يرجى إكمال البيانات");
         
-        handleBotResponse(`name: ${name} phone: ${code}${phone}`);
+        handleBotResponse(`final_booking: name: ${name} phone: ${code}${phone} service: ${currentService}`);
     }
 </script>
 </body>
