@@ -6,8 +6,10 @@ from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
 from openai import OpenAI
 import requests
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # =========================
 # ENV
