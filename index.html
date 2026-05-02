@@ -63,10 +63,10 @@ body {
   border-top: 1px solid #ddd;
 }
 
-input {
-  flex: 1;
-  padding: 10px;
-  border: none;
+input, select {
+  width: 90%;
+  padding: 8px;
+  margin-top: 5px;
 }
 
 button.send {
@@ -141,30 +141,82 @@ function selectService(name, price) {
   addButtons([{ text: "احجز الآن", onClick: showForm }]);
 }
 
+// 🔥 الفورم بعد الإصلاح
 function showForm() {
   addMessage(`
-    <input id="name" placeholder="الاسم"><br><br>
-    <input id="phone" placeholder="رقم الهاتف"><br><br>
-    <button onclick="submitBooking()">تأكيد</button>
+    <div id="bookingForm">
+      <input id="name" placeholder="الاسم بالكامل">
+
+      <select id="country">
+        <option value="+20">🇪🇬 مصر</option>
+        <option value="+966">🇸🇦 السعودية</option>
+        <option value="+971">🇦🇪 الإمارات</option>
+      </select>
+
+      <input id="phone" placeholder="رقم الهاتف">
+
+      <button id="submitBtn">تأكيد الحجز</button>
+    </div>
   `);
+
+  setTimeout(() => {
+    document.getElementById("submitBtn").onclick = submitBooking;
+  }, 100);
 }
 
+// 🔥 Validation + أسباب الرفض
+function validate(name, phone) {
+  if (name.length < 3) {
+    return "❌ الاسم لازم يكون 3 حروف على الأقل";
+  }
+
+  if (!/^[a-zA-Z\u0600-\u06FF\s]+$/.test(name)) {
+    return "❌ الاسم لازم يكون حروف فقط بدون أرقام";
+  }
+
+  if (!/^[0-9]{8,15}$/.test(phone)) {
+    return "❌ رقم الهاتف لازم يكون من 8 لـ 15 رقم";
+  }
+
+  return null;
+}
+
+// إرسال الحجز
 async function submitBooking() {
-  const name = document.getElementById("name").value;
-  const phone = document.getElementById("phone").value;
+  const name = document.getElementById("name")?.value.trim();
+  const phone = document.getElementById("phone")?.value.trim();
+  const code = document.getElementById("country")?.value;
 
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      message: `name: ${name} phone: ${phone} service: ${selectedService}`
-    })
-  });
+  const error = validate(name, phone);
 
-  const data = await res.json();
-  addMessage(data.reply);
+  if (error) {
+    addMessage(error);
+    return;
+  }
+
+  const fullPhone = code + phone;
+
+  addMessage("⏳ جاري إرسال البيانات...");
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        message: `name: ${name} phone: ${fullPhone} service: ${selectedService}`
+      })
+    });
+
+    const data = await res.json();
+
+    addMessage(data.reply || "تم الحجز ✅");
+
+  } catch (e) {
+    addMessage("❌ حصل خطأ في الاتصال بالسيرفر");
+  }
 }
 
+// رسالة عادية
 async function sendMessage() {
   const input = document.getElementById("messageInput");
   const msg = input.value;

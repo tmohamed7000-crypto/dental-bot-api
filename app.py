@@ -1,4 +1,6 @@
 import os
+import re
+import json
 import sqlite3
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
@@ -35,6 +37,7 @@ def init_db():
         name TEXT,
         phone TEXT,
         service TEXT,
+        tag TEXT,
         status TEXT,
         created_at TEXT
     )
@@ -45,41 +48,74 @@ def init_db():
 
 init_db()
 
-def save_client(name, phone, service):
+
+def save_client(name, phone, service, tag):
     conn = sqlite3.connect("clients.db")
     c = conn.cursor()
 
     c.execute(
-        "INSERT INTO clients (name, phone, service, status, created_at) VALUES (?, ?, ?, ?, ?)",
-        (name, phone, service, "جديد", datetime.now().strftime("%Y-%m-%d %H:%M"))
+        "INSERT INTO clients (name, phone, service, tag, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, phone, service, tag, "جديد", datetime.now().strftime("%Y-%m-%d %H:%M"))
     )
 
     conn.commit()
     conn.close()
 
 # =========================
-# SYSTEM PROMPT
+# VALIDATION
 # =========================
-SYSTEM_PROMPT = """
-أنت موظف استقبال محترف في Optimum Care Dental Clinic.
+def validate_name(name):
+    return len(name.strip()) >= 3
 
-هدفك:
-تحويل أي عميل لحجز.
+def validate_phone(phone):
+    return re.match(r"^\+?\d{8,15}$", phone)
 
-أسلوبك:
-- عربي بسيط
-- مختصر
-- مقنع
+# =========================
+# AI (SMART)
+# =========================
+def ask_ai(user_text):
+    completion = client.chat.completions.create(
+        model="openai/gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+أنت موظف استقبال ذكي في عيادة أسنان.
 
-الخدمات:
-- تبييض الأسنان: 6000 جنيه
-- فينير: من 12000 جنيه
-- زراعة: من 8000 جنيه
+مهمتك:
+1- الرد على العميل
+2- تحديد:
+- service (الخدمة)
+- tag (نوع الحالة: ألم / تجميل / زراعة / تنظيف)
 
-اطلب:
-name:
-phone:
+أمثلة:
+- "سناني بتوجعني" → علاج جذور / ألم
+- "عايز ابتسامة حلوة" → فينير / تجميل
+- "عايز أنضف سناني" → تنظيف / تنظيف
+
+ارجع JSON فقط:
+
+{
+"reply": "نص الرد",
+"service": "اسم الخدمة",
+"tag": "التصنيف"
+}
 """
+            },
+            {"role": "user", "content": user_text}
+        ]
+    )
+
+    content = completion.choices[0].message.content
+
+    try:
+        return json.loads(content)
+    except:
+        return {
+            "reply": content,
+            "service": "غير محدد",
+            "tag": "غير معروف"
+        }
 
 # =========================
 # HOME
@@ -102,28 +138,53 @@ def chat():
     lower = msg.lower()
 
     try:
-        # ===== حجز =====
+        # =====================
+        # 📥 حجز
+        # =====================
         if "name:" in lower and "phone:" in lower:
 
             name = msg.split("name:")[1].split("phone:")[0].strip()
             phone = msg.split("phone:")[1].split("service:")[0].strip()
 
             service = "غير محدد"
+            tag = "غير معروف"
+
             if "service:" in lower:
                 service = msg.split("service:")[1].strip()
 
-            save_client(name, phone, service)
+            # ✅ Validation
+            if not validate_name(name):
+                return jsonify({"reply": "❌ الاسم لازم يكون 3 حروف على الأقل"})
 
-            send_to_telegram(f"📥 عميل جديد:\n{name}\n{phone}\n{service}")
+            if not validate_phone(phone):
+                return jsonify({"reply": "❌ رقم الهاتف غير صحيح"})
+
+            # 🧠 AI يحلل آخر رسالة (اختياري تحسين)
+            ai = ask_ai(service)
+            tag = ai.get("tag", "غير معروف")
+
+            save_client(name, phone, service, tag)
+
+            send_to_telegram(
+                f"📥 عميل جديد:\n👤 {name}\n📞 {phone}\n🦷 {service}\n🏷 {tag}"
+            )
 
             return jsonify({
                 "reply": "تم الحجز ✅ هنكلمك قريب"
             })
 
-        # ===== AI =====
-        reply = ask_ai(msg)
+        # =====================
+        # 🤖 AI رد
+        # =====================
+        ai = ask_ai(msg)
 
-        send_to_telegram(f"💬 {msg}\n🤖 {reply}")
+        reply = ai["reply"]
+        service = ai["service"]
+        tag = ai["tag"]
+
+        send_to_telegram(
+            f"💬 {msg}\n🤖 {reply}\n🦷 {service}\n🏷 {tag}"
+        )
 
         return jsonify({"reply": reply})
 
@@ -139,7 +200,7 @@ def admin():
     conn = sqlite3.connect("clients.db")
     c = conn.cursor()
 
-    c.execute("SELECT id, name, phone, service, status, created_at FROM clients ORDER BY id DESC")
+    c.execute("SELECT id, name, phone, service, tag, status, created_at FROM clients ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
 
@@ -150,6 +211,7 @@ def admin():
     <th>الاسم</th>
     <th>الرقم</th>
     <th>الخدمة</th>
+    <th>النوع</th>
     <th>الحالة</th>
     <th>تغيير</th>
     </tr>
@@ -162,6 +224,7 @@ def admin():
         <td>{r[2]}</td>
         <td>{r[3]}</td>
         <td>{r[4]}</td>
+        <td>{r[5]}</td>
         <td>
             <a href="/update/{r[0]}/تم التواصل">تم التواصل</a> |
             <a href="/update/{r[0]}/تم الحجز">تم الحجز</a>
@@ -188,17 +251,25 @@ def update_status(id, status):
     return f"تم التحديث إلى {status} ✅ <br><a href='/admin'>رجوع</a>"
 
 # =========================
-# AI
+# STATS API
 # =========================
-def ask_ai(text):
-    res = client.chat.completions.create(
-        model="openai/gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text}
-        ]
-    )
-    return res.choices[0].message.content
+@app.route("/stats")
+def stats():
+    conn = sqlite3.connect("clients.db")
+    c = conn.cursor()
+
+    c.execute("SELECT service, COUNT(*) FROM clients GROUP BY service")
+    services = c.fetchall()
+
+    c.execute("SELECT tag, COUNT(*) FROM clients GROUP BY tag")
+    tags = c.fetchall()
+
+    conn.close()
+
+    return jsonify({
+        "services": services,
+        "tags": tags
+    })
 
 # =========================
 # TELEGRAM
@@ -207,10 +278,11 @@ def send_message(chat_id, text):
     try:
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": chat_id, "text": text}
+            json={"chat_id": chat_id, "text": text},
+            timeout=10
         )
-    except:
-        pass
+    except Exception as e:
+        print("Telegram Error:", e)
 
 def send_to_telegram(text):
     if ADMIN_CHAT_ID:
