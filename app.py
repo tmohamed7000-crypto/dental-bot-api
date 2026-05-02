@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import csv
 from datetime import datetime
 
@@ -6,26 +6,19 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Dental Bot Running 🚀", 200
-
+    return send_file("index.html")   # 👈 دي المهمة
 
 def get_reply(msg):
     msg = (msg or "").lower()
 
-    if any(x in msg for x in ["تبييض", "white", "bleach"]):
+    if "تبييض" in msg:
         return "تبييض يبدأ من 6000 جنيه 🦷"
-
-    if any(x in msg for x in ["زراعة", "implant"]):
+    if "زراعة" in msg:
         return "زراعة تبدأ من 8000 جنيه 💰"
-
-    if any(x in msg for x in ["فينير", "veneer"]):
+    if "فينير" in msg:
         return "فينير يبدأ من 12000 جنيه ✨"
 
-    if "حجز" in msg or "book" in msg:
-        return "تمام 👌 ابعت:\nname: محمد, phone: 010..."
-
-    return "ممكن تقولي نوع الخدمة؟ (تبييض - زراعة - فينير)"
-
+    return "ممكن تقولي نوع الخدمة؟"
 
 def save_lead(name, phone):
     try:
@@ -35,37 +28,18 @@ def save_lead(name, phone):
     except Exception as e:
         print("Save error:", e)
 
-
-def extract_data(msg):
-    try:
-        parts = msg.split(",")
-        name = ""
-        phone = ""
-
-        for part in parts:
-            if "name:" in part:
-                name = part.split("name:")[1].strip()
-            if "phone:" in part:
-                phone = part.split("phone:")[1].strip()
-
-        if name and phone:
-            return name, phone
-        return None, None
-    except:
-        return None, None
-
-
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.get_json(silent=True) or {}
         msg = data.get("message", "")
 
-        name, phone = extract_data(msg)
+        if "name:" in msg and "phone:" in msg:
+            name = msg.split("name:")[1].split(",")[0].strip()
+            phone = msg.split("phone:")[1].strip()
 
-        if name and phone:
             save_lead(name, phone)
-            return jsonify({"reply": "تم الحجز ✅ هنتواصل معاك قريب"})
+            return jsonify({"reply": "تم الحجز ✅"})
 
         return jsonify({"reply": get_reply(msg)})
 
