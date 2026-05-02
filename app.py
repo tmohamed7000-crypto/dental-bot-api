@@ -10,17 +10,17 @@ app = Flask(__name__)
 def get_reply(msg):
     msg = msg.lower()
 
-    if "تبييض" in msg:
+    if any(word in msg for word in ["تبييض", "white", "bleach"]):
         return "تبييض الاسنان يبدأ من 6000 جنيه 🦷"
     
-    if "زراعة" in msg:
+    if any(word in msg for word in ["زراعة", "implant"]):
         return "زراعة الاسنان تبدأ من 8000 جنيه 💰"
     
-    if "فينير" in msg:
+    if any(word in msg for word in ["فينير", "veneer"]):
         return "الفينير يبدأ من 12000 جنيه ✨"
     
-    if "حجز" in msg:
-        return "تمام 👌 ابعت اسمك ورقمك علشان نحجز لك"
+    if "حجز" in msg or "book" in msg:
+        return "تمام 👌 ابعت اسمك ورقمك بالشكل ده:\nname: محمد, phone: 010..."
 
     return "ممكن تقولي نوع الخدمة؟ (تبييض - زراعة - فينير)"
 
@@ -38,7 +38,7 @@ def save_lead(name, phone):
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
-    msg = data.get("message")
+    msg = data.get("message", "")
 
     # لو المستخدم بعت بياناته
     if "name:" in msg and "phone:" in msg:
@@ -57,4 +57,4 @@ def chat():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
