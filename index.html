@@ -223,6 +223,11 @@ async function sendMessage() {
 
   if (!msg) return;
 
+  // ✅ هنا التعديل
+  if (msg.includes("الم") || msg.includes("وجع") || msg.includes("سناني")) {
+    selectedService = "كشف";
+  }
+
   addMessage(msg, "user");
   input.value = "";
 
