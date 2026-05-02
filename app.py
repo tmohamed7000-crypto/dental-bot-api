@@ -60,7 +60,7 @@ user_states = {}
 @app.route("/")
 def home(): return send_from_directory(".", "index.html")
 
-@app.route("/chat", methods=["POST"])@app.route("/chat", methods=["POST"])
+@app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
     msg = data.get("message", "")
