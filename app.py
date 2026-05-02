@@ -49,9 +49,11 @@ phone:
 # =========================
 # HOME
 # =========================
+from flask import send_from_directory
+
 @app.route("/")
 def home():
-    return "Bot is running 🚀"
+    return send_from_directory(".", "index.html")
 
 # =========================
 # CHAT API (لـ HTML)
