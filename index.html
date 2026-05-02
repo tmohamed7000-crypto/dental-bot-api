@@ -104,13 +104,32 @@
         chatBox.appendChild(div); chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    function processForm() {
-        const name = document.getElementById("fName").value;
-        const phone = document.getElementById("fPhone").value;
-        const code = document.getElementById("fCode").value;
-        if(name.length < 3 || phone.length < 8) return alert("يرجى إكمال البيانات");
-        handleBotResponse(`final_booking: name: ${name} phone: ${code}${phone} service: ${activeService}`);
-    }
+async function processForm() {
+    const name = document.getElementById("fName").value;
+    const phone = document.getElementById("fPhone").value;
+    const code = document.getElementById("fCode").value;
+    
+    if(name.length < 3 || phone.length < 8) return alert("يرجى إكمال البيانات");
+
+    // إرسال البيانات كأوبجكت JSON وليس كنص مجرد لمنع أخطاء الـ Parsing
+    showTyping(async () => {
+        const res = await fetch("/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ 
+                message: {
+                    type: "final_booking",
+                    name: name,
+                    phone: code + phone,
+                    service: activeService
+                }
+            })
+        });
+        const data = await res.json();
+        addMessage(data.reply);
+    });
+}
+
 </script>
 </body>
 </html>

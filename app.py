@@ -20,7 +20,7 @@ client = OpenAI(base_url="https://openrouter.ai", api_key=OPENROUTER_API_KEY)
 SERVICES = {
     "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
     "فينير": {"price": "12000 جنيه", "link": "https://setmore.com"},
-    
+
     "زراعة": {"price": "8000 جنيه", "link": "https://setmore.com"},
     "كشف": {"price": "350 جنيه", "link": "https://setmore.com"},
     "تقويم": {"price": "400 جنيه", "link": "https://setmore.com"},
@@ -60,36 +60,39 @@ user_states = {}
 @app.route("/")
 def home(): return send_from_directory(".", "index.html")
 
-@app.route("/chat", methods=["POST"])
+@app.route("/chat", methods=["POST"])@app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
     msg = data.get("message", "")
     user_id = request.remote_addr
-    if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
-    state = user_states[user_id]
-
-    if "final_booking:" in msg:
+    
+    # التحقق إذا كانت البيانات قادمة من "فورم الحجز" كـ JSON
+    if isinstance(msg, dict) and msg.get("type") == "final_booking":
         try:
-            # استخراج البيانات بدقة أكبر
-            name = msg.split("name: ")[1].split(" phone:")[0]
-            phone = msg.split("phone: ")[1].split(" service:")[0]
-            service = msg.split("service: ")[1]
+            name = msg.get("name")
+            phone = msg.get("phone")
+            service = msg.get("service")
             
             conn = sqlite3.connect("clients.db")
-            conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
+            conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", 
+                         (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
             conn.commit()
             conn.close()
 
             if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
-                requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", json={"chat_id": ADMIN_CHAT_ID, "text": f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"})
+                requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
+                              json={"chat_id": ADMIN_CHAT_ID, "text": f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"})
             
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
-            user_states[user_id] = {"step": "ask_service", "service": None}
-            return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً لتأكيد الموعد.\nيمكنك الحجز مباشرة من هنا أيضاً: {link}"})
+            return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً.\nيمكنك تأكيد الحجز فوراً من هنا: {link}"})
         except:
-            return jsonify({"reply": "عذراً، حدث خطأ أثناء تسجيل البيانات. يرجى المحاولة مرة أخرى."})
+            return jsonify({"reply": "عذراً، حدث خطأ في النظام. حاول مرة أخرى."})
 
-    if any(x in msg.lower() for x in ["سلام", "اهلا", "hi", "hello"]):
+    # باقي منطق المحادثة العادي (الذكاء الاصطناعي والتحية)
+    if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
+    state = user_states[user_id]
+    
+    if any(x in msg.lower() for x in ["سلام", "اهلا", "hi"]):
         return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
 
     if state["step"] == "ask_service":
@@ -99,10 +102,9 @@ def chat():
             state["service"] = service
             state["step"] = "collect_data"
             res = SERVICES[service]
-            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\nالتكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك الثلاثي ورقم موبايلك لنرتب لك الموعد؟ 👇", "current_service": service})
-        return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم استفسار عن خدمات التجميل؟", "show_services": True})
-
-    return jsonify({"reply": "عذراً، هل يمكنك توضيح طلبك؟"})
+            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\nالتكلفة: {res['price']}.\n\nممكن تشرفني باسمك ورقم موبايلك؟ 👇", "current_service": service})
+    
+    return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم تجميل؟", "show_services": True})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
