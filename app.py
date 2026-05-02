@@ -6,7 +6,7 @@ import os
 app = Flask(__name__)
 
 # ----------------------------
-# Home Route (المهم جداً)
+# Home Route
 # ----------------------------
 @app.route("/")
 def home():
@@ -33,38 +33,46 @@ def get_reply(msg):
     return "ممكن تقولي نوع الخدمة؟ (تبييض - زراعة - فينير)"
 
 # ----------------------------
-# حفظ البيانات
+# حفظ البيانات (Safe)
 # ----------------------------
 def save_lead(name, phone):
-    with open("leads.csv", mode="a", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow([name, phone, datetime.now()])
+    try:
+        with open("leads.csv", mode="a", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow([name, phone, datetime.now()])
+    except Exception as e:
+        print("Error saving lead:", e)
 
 # ----------------------------
 # API
 # ----------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.json
-    msg = data.get("message", "")
+    try:
+        data = request.get_json(silent=True) or {}
+        msg = data.get("message", "")
 
-    # لو المستخدم بعت بياناته
-    if "name:" in msg and "phone:" in msg:
-        try:
-            name = msg.split("name:")[1].split(",")[0].strip()
-            phone = msg.split("phone:")[1].strip()
+        # لو المستخدم بعت بياناته
+        if "name:" in msg and "phone:" in msg:
+            try:
+                name = msg.split("name:")[1].split(",")[0].strip()
+                phone = msg.split("phone:")[1].strip()
 
-            save_lead(name, phone)
+                save_lead(name, phone)
 
-            return jsonify({"reply": "تم الحجز ✅ هنتواصل معاك قريب"})
-        except:
-            return jsonify({"reply": "حصل خطأ، ابعت البيانات بالشكل ده:\nname: محمد, phone: 010..."})
+                return jsonify({"reply": "تم الحجز ✅ هنتواصل معاك قريب"})
+            except:
+                return jsonify({"reply": "حصل خطأ، ابعت البيانات بالشكل ده:\nname: محمد, phone: 010..."})
 
-    reply = get_reply(msg)
-    return jsonify({"reply": reply})
+        reply = get_reply(msg)
+        return jsonify({"reply": reply})
+
+    except Exception as e:
+        print("Error in /chat:", e)
+        return jsonify({"reply": "حصل خطأ في السيرفر، حاول تاني بعد شوية"}), 500
 
 # ----------------------------
-# تشغيل السيرفر (مهم لـ Railway)
+# تشغيل السيرفر
 # ----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
