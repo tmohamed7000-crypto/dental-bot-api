@@ -1,8 +1,15 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import csv
 from datetime import datetime
 
 app = Flask(__name__)
+
+# ----------------------------
+# الصفحة الرئيسية
+# ----------------------------
+@app.route("/")
+def home():
+    return send_from_directory(".", "index.html")
 
 # ----------------------------
 # Knowledge Base
@@ -40,7 +47,6 @@ def chat():
     data = request.json
     msg = data.get("message", "")
 
-    # لو المستخدم بعت بياناته
     if "name:" in msg and "phone:" in msg:
         try:
             name = msg.split("name:")[1].split(",")[0].strip()
