@@ -27,6 +27,16 @@ client = OpenAI(
 )
 
 # =========================
+# 💰 PRICING (مهم جداً)
+# =========================
+PRICES = {
+    "تبييض": "6000 جنيه",
+    "زراعة": "8000 جنيه",
+    "فينير": "12000 جنيه",
+    "كشف": "100 جنيه"
+}
+
+# =========================
 # DATABASE
 # =========================
 def init_db():
@@ -73,7 +83,7 @@ def validate_phone(phone):
     return re.match(r"^\+?\d{8,15}$", phone)
 
 # =========================
-# AI (SMART)
+# 🧠 AI
 # =========================
 def ask_ai(user_text):
     completion = client.chat.completions.create(
@@ -84,13 +94,15 @@ def ask_ai(user_text):
                 "content": """
 أنت موظف استقبال في عيادة أسنان.
 
-افهم كلام العميل وحدد الخدمة المناسبة.
+افهم كلام العميل وحدد:
+- الخدمة
+- نوع الحالة
 
 ارجع JSON فقط:
 
 {
-"reply": "رد مقنع فيه سعر + طلب الحجز",
-"service": "اسم الخدمة",
+"reply": "رد مقنع بدون أسعار",
+"service": "تبييض أو زراعة أو فينير أو كشف",
 "tag": "ألم أو تجميل أو زراعة"
 }
 """
@@ -104,21 +116,28 @@ def ask_ai(user_text):
     try:
         return json.loads(content)
     except:
-        # 🔥 fallback ذكي
         return {
-            "reply": f"""
-واضح إن عندك مشكلة في الأسنان 😣
+            "reply": "ممكن توضح أكتر المشكلة؟",
+            "service": "كشف",
+            "tag": "ألم"
+        }
 
-ممكن تحتاج كشف أو علاج مناسب للحالة  
-الكشف عندنا 350 جنيه 🦷
+# =========================
+# 💡 توليد رد مضبوط بالسعر
+# =========================
+def build_reply(ai_data):
+    service = ai_data.get("service", "كشف")
+
+    price = PRICES.get(service, "يحدد بعد الكشف")
+
+    return f"""الخدمة: {service} 💎  
+السعر يبدأ من {price}
 
 تحب أحجزلك؟ ابعت:
 name:
 phone:
-""",
-            "service": "كشف",
-            "tag": "ألم"
-        }
+"""
+
 # =========================
 # HOME
 # =========================
@@ -148,7 +167,7 @@ def chat():
             name = msg.split("name:")[1].split("phone:")[0].strip()
             phone = msg.split("phone:")[1].split("service:")[0].strip()
 
-            service = "غير محدد"
+            service = "كشف"
             tag = "غير معروف"
 
             if "service:" in lower:
@@ -159,9 +178,9 @@ def chat():
                 return jsonify({"reply": "❌ الاسم لازم يكون 3 حروف على الأقل"})
 
             if not validate_phone(phone):
-                return jsonify({"reply": "❌ رقم الهاتف غير صحيح"})
+                return jsonify({"reply": "❌ رقم الهاتف غير صحيح (اكتب كده: 010xxxxxxxx)"})
 
-            # 🧠 AI يحلل آخر رسالة (اختياري تحسين)
+            # 🧠 تحليل tag من الخدمة
             ai = ask_ai(service)
             tag = ai.get("tag", "غير معروف")
 
@@ -176,16 +195,14 @@ def chat():
             })
 
         # =====================
-        # 🤖 AI رد
+        # 🤖 AI + تحكم
         # =====================
         ai = ask_ai(msg)
 
-        reply = ai["reply"]
-        service = ai["service"]
-        tag = ai["tag"]
+        reply = build_reply(ai)
 
         send_to_telegram(
-            f"💬 {msg}\n🤖 {reply}\n🦷 {service}\n🏷 {tag}"
+            f"💬 {msg}\n🤖 {reply}\n🦷 {ai.get('service')}\n🏷 {ai.get('tag')}"
         )
 
         return jsonify({"reply": reply})
@@ -253,7 +270,7 @@ def update_status(id, status):
     return f"تم التحديث إلى {status} ✅ <br><a href='/admin'>رجوع</a>"
 
 # =========================
-# STATS API
+# STATS
 # =========================
 @app.route("/stats")
 def stats():
