@@ -27,13 +27,16 @@ client = OpenAI(
 )
 
 # =========================
-# 💰 PRICING
+# SERVICES (ثابت واحد بس)
 # =========================
-PRICES = {
-    "تبييض": "6000 جنيه",
-    "زراعة": "8000 جنيه",
-    "فينير": "12000 جنيه",
-    "كشف": "100 جنيه"
+SERVICES = {
+    "تبييض": {"price": "6000 جنيه"},
+    "فينير": {"price": "12000 جنيه"},
+    "زراعة": {"price": "8000 جنيه"},
+    "كشف": {"price": "350 جنيه"},
+    "تقويم": {"price": "400 جنيه"},
+    "طوارئ": {"price": "1200 جنيه"},
+    "ابتسامة": {"price": "2000 جنيه"}
 }
 
 # =========================
@@ -79,85 +82,69 @@ def validate_name(name):
     return len(name.strip()) >= 3
 
 def validate_phone(phone):
-    return re.match(r"^\+?\d{8,15}$", phone)
+    return re.match(r"^\+?\d{10,15}$", phone)
 
 # =========================
-# SESSION (flow)
+# SESSION
 # =========================
 user_states = {}
 
 # =========================
-# 🧠 AI
+# AI
 # =========================
 def ask_ai(user_text):
-    completion = client.chat.completions.create(
-        model="openai/gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-أنت موظف استقبال محترف في عيادة أسنان.
+    try:
+        completion = client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
+حدد الخدمة فقط من:
+تبييض - فينير - زراعة - كشف
 
-مهمتك:
-- فهم كلام العميل
-- تحديد الخدمة المناسبة
-- تحديد نوع الحالة
-
-⚠️ ممنوع تذكر أي أسعار نهائيًا
-
-الخدمات:
-- تبييض (تجميل)
-- فينير (تجميل)
-- زراعة (زراعة)
-- كشف (ألم أو فحص)
-
-أمثلة:
-- "سناني فيها ألم" → كشف
-- "عايز ابتسامة حلوة" → تبييض أو فينير
-- "سن واقع" → زراعة
-
-ارجع JSON فقط بدون شرح:
-
+ارجع JSON فقط:
 {
 "service": "اسم الخدمة",
-"tag": "ألم أو تجميل أو زراعة",
-"confidence": "high أو medium أو low"
+"tag": "ألم أو تجميل أو زراعة"
 }
 """
-            },
-            {"role": "user", "content": user_text}
-        ]
-    )
+                },
+                {"role": "user", "content": user_text}
+            ]
+        )
 
-    content = completion.choices[0].message.content
-
-    try:
+        content = completion.choices[0].message.content
         return json.loads(content)
+
     except:
         return {
             "service": "كشف",
-            "tag": "ألم",
-            "confidence": "low"
+            "tag": "ألم"
         }
+
 # =========================
-# 💥 SALES SCRIPT
+# SALES
 # =========================
-def build_sales_reply(service, confidence="high"):
-    price = PRICES.get(service, "يحدد بعد الكشف")
+def build_sales_reply(service):
+    data = SERVICES.get(service)
 
-    if confidence == "low":
-        return """محتاج تفاصيل أكتر عن حالتك 🤔  
-ممكن توضح المشكلة أكتر؟"""
+    if not data:
+        service = "كشف"
+        data = SERVICES["كشف"]
 
-    return f"""تمام 👌
+    return f"""
+تمام 👌
 
-واضح إنك محتاج {service} 🦷  
-السعر يبدأ من {price}
+الخدمة: {service} 💎  
+السعر: {data['price']}  
 
-🔥 عندنا عرض لفترة محدودة  
-والحجز النهارده بيضمنلك أفضل نتيجة
+🔥 الأماكن محدودة اليومين دول  
+والحجز بدري بيضمنلك معاد مناسب  
 
-تحب نحجزلك دلوقتي؟ قولي اسمك 👇"""
+تحب أحجزلك دلوقتي؟  
+قولّي اسمك 👇
+"""
 
 # =========================
 # HOME
@@ -185,7 +172,6 @@ def chat():
             "step": "start",
             "service": None,
             "name": None,
-            "last_seen": datetime.now()
         }
 
     state = user_states[user_id]
@@ -193,15 +179,9 @@ def chat():
     # =====================
     # 👋 Greeting
     # =====================
-    greetings = ["السلام", "اهلا", "مرحبا", "hi", "hello"]
-
-    if state["step"] == "start" and any(g in lower for g in greetings):
+    if state["step"] == "start" and any(x in lower for x in ["السلام", "اهلا", "hi", "hello"]):
         state["step"] = "ask_service"
-
-        return jsonify({
-            "reply": "أهلاً بيك 👋\nقولّي المشكلة أو اختار خدمة:",
-            "show_buttons": True
-        })
+        return jsonify({"reply": "أهلاً 👋 قولّي المشكلة أو اختار خدمة"})
 
     # =====================
     # 🧠 تحديد الخدمة
@@ -209,18 +189,17 @@ def chat():
     if state["step"] in ["start", "ask_service"]:
 
         ai = ask_ai(msg)
-
-        service = ai["service"]
-        confidence = ai.get("confidence", "high")
+        service = ai.get("service", "كشف")
 
         state["service"] = service
-        state["step"] = "ask_name"
+        state["step"] = "ask_name"   # 🔥 أهم سطر
 
-        reply = build_sales_reply(service, confidence)
+        reply = build_sales_reply(service)
 
-        return jsonify({
-            "reply": reply
-        })
+        send_to_telegram(f"💬 {msg}\n🦷 {service}")
+
+        return jsonify({"reply": reply})
+
     # =====================
     # 👤 الاسم
     # =====================
@@ -232,9 +211,7 @@ def chat():
         state["name"] = msg
         state["step"] = "ask_phone"
 
-        return jsonify({
-            "reply": "تمام 👍 ابعت رقمك عشان نحجزلك فورًا 📞"
-        })
+        return jsonify({"reply": "تمام 👍 ابعت رقمك 📞"})
 
     # =====================
     # 📞 الهاتف
@@ -249,7 +226,7 @@ def chat():
         service = state["service"]
 
         ai = ask_ai(service)
-        tag = ai["tag"]
+        tag = ai.get("tag", "غير معروف")
 
         save_client(name, phone, service, tag)
 
@@ -259,24 +236,12 @@ def chat():
 
         state["step"] = "done"
 
-        return jsonify({
-            "reply": "🔥 تم الحجز! فريقنا هيكلمك خلال دقائق"
-        })
+        return jsonify({"reply": "🔥 تم الحجز! هنتواصل معاك خلال دقائق"})
 
     # =====================
-    # 💤 FOLLOW-UP
+    # DONE
     # =====================
-    if state["step"] == "ask_name":
-        return jsonify({
-            "reply": "لسه مستني اسمك عشان نحجزلك 😉"
-        })
-
-    if state["step"] == "ask_phone":
-        return jsonify({
-            "reply": "ابعت رقمك بسرعة قبل ما العرض يخلص ⏳"
-        })
-
-    return jsonify({"reply": "قولّي محتاج إيه وأنا أساعدك 👌"})
+    return jsonify({"reply": "تم تسجيلك بالفعل ✅ لو عايز حاجة تانية قولّي 👌"})
 
 # =========================
 # ADMIN
@@ -290,7 +255,7 @@ def admin():
     rows = c.fetchall()
     conn.close()
 
-    html = "<h2>العملاء</h2><table border=1>"
+    html = "<h2>📋 العملاء</h2><table border=1 cellpadding=10>"
 
     for r in rows:
         html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>"
