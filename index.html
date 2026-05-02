@@ -1,246 +1,272 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>Optimum Care Chat</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optimum Care Dental Clinic Chat</title>
 <style>
-body {
-  font-family: Arial;
-  background: #f5f5f5;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-}
+    :root {
+        --primary-color: #008080; /* Teal - لون عيادات الأسنان */
+        --secondary-color: #f8f9fa;
+        --accent-color: #ffd700; /* Gold للعروسة */
+        --bot-msg: #ffffff;
+        --user-msg: #008080;
+    }
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #e9ecef;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    }
+    .chat-container {
+        width: 100%;
+        max-width: 400px;
+        height: 600px;
+        background: white;
+        border-radius: 20px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    }
+    .chat-header {
+        background: var(--primary-color);
+        color: white;
+        padding: 20px;
+        text-align: center;
+    }
+    .chat-header h2 { margin: 0; font-size: 1.2rem; }
+    .chat-header p { margin: 5px 0 0; font-size: 0.8rem; opacity: 0.9; }
 
-.chat-container {
-  width: 360px;
-  background: white;
-  border-radius: 15px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
-}
-
-.chat-header {
-  background: #007bff;
-  color: white;
-  padding: 15px;
-  text-align: center;
-  font-weight: bold;
-}
-
-.chat-box {
-  height: 420px;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.message {
-  margin: 10px 0;
-  padding: 10px;
-  border-radius: 10px;
-  max-width: 80%;
-}
-
-.bot { background: #eee; }
-.user { background: #007bff; color: white; margin-left: auto; }
-
-.buttons button {
-  margin: 5px;
-  padding: 8px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  background: #007bff;
-  color: white;
-}
-
-.input-area {
-  display: flex;
-  border-top: 1px solid #ddd;
-}
-
-input, select {
-  width: 90%;
-  padding: 8px;
-  margin-top: 5px;
-}
-
-button.send {
-  background: #007bff;
-  color: white;
-  border: none;
-  padding: 10px;
-}
+    .chat-box {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px;
+        background: #f0f2f5;
+        display: flex;
+        flex-direction: column;
+    }
+    .message {
+        margin: 8px 0;
+        padding: 12px 16px;
+        border-radius: 15px;
+        max-width: 85%;
+        line-height: 1.5;
+        font-size: 0.95rem;
+        position: relative;
+    }
+    .bot { 
+        background: var(--bot-msg); 
+        color: #333; 
+        align-self: flex-start;
+        border-bottom-right-radius: 2px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .user { 
+        background: var(--user-msg); 
+        color: white; 
+        align-self: flex-end;
+        border-bottom-left-radius: 2px;
+    }
+    .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .buttons button {
+        padding: 8px 15px;
+        border: 1px solid var(--primary-color);
+        border-radius: 20px;
+        background: white;
+        color: var(--primary-color);
+        cursor: pointer;
+        transition: 0.3s;
+        font-size: 0.85rem;
+    }
+    .buttons button:hover {
+        background: var(--primary-color);
+        color: white;
+    }
+    .form-container {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        margin-top: 10px;
+    }
+    .form-container input, .form-container select {
+        width: 100%;
+        padding: 10px;
+        margin: 5px 0;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-sizing: border-box;
+    }
+    .submit-btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        width: 100%;
+        padding: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .input-area {
+        display: flex;
+        padding: 15px;
+        background: white;
+        border-top: 1px solid #eee;
+    }
+    #messageInput {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 25px;
+        outline: none;
+        margin-left: 10px;
+    }
+    .send-btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+    }
 </style>
 </head>
-
 <body>
 
 <div class="chat-container">
-  <div class="chat-header">Optimum Care Assistant</div>
-  <div class="chat-box" id="chatBox"></div>
-
-  <div class="input-area">
-    <input id="messageInput" placeholder="اكتب..." />
-    <button class="send" onclick="sendMessage()">إرسال</button>
-  </div>
+    <div class="chat-header">
+        <h2>Optimum Care Clinic</h2>
+        <p>د. هبة عمار - استشاري تجميل الأسنان</p>
+    </div>
+    <div class="chat-box" id="chatBox"></div>
+    <div class="input-area">
+        <input id="messageInput" placeholder="اكتب سؤالك هنا..." onkeypress="handleKeyPress(event)" />
+        <button class="send-btn" onclick="sendMessage()">➤</button>
+    </div>
 </div>
 
 <script>
-const API_URL = "https://dental-bot-api-production-1c32.up.railway.app/chat";
-
+const API_URL = "/chat"; // تأكد أن المسار مطابق لـ Railway
 let selectedService = "";
 
-// رسائل
 function addMessage(text, type="bot") {
-  const box = document.getElementById("chatBox");
-  const div = document.createElement("div");
-  div.className = "message " + type;
-  div.innerHTML = text;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
+    const box = document.getElementById("chatBox");
+    const div = document.createElement("div");
+    div.className = "message " + type;
+    div.innerHTML = text.replace(/\n/g, '<br>');
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
 }
 
-// أزرار
 function addButtons(buttons) {
-  const box = document.getElementById("chatBox");
-  const div = document.createElement("div");
-  div.className = "buttons";
-
-  buttons.forEach(btn => {
-    const b = document.createElement("button");
-    b.innerText = btn.text;
-    b.onclick = btn.onClick;
-    div.appendChild(b);
-  });
-
-  box.appendChild(div);
+    const box = document.getElementById("chatBox");
+    const div = document.createElement("div");
+    div.className = "buttons";
+    buttons.forEach(btn => {
+        const b = document.createElement("button");
+        b.innerText = btn.text;
+        b.onclick = btn.onClick;
+        div.appendChild(b);
+    });
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
 }
 
-// بداية
 window.onload = () => {
-  addMessage("أهلاً 👋 اختر الخدمة:");
-  showServices();
+    addMessage("أهلاً بك في عيادة أوبتمم كير 🦷✨\nأنا مساعدك الذكي، كيف يمكنني مساعدتك اليوم؟");
+    showMainServices();
 };
 
-function showServices() {
-  addButtons([
-    { text: "تبييض", onClick: () => selectService("تبييض", "6000") },
-    { text: "زراعة", onClick: () => selectService("زراعة", "8000") },
-    { text: "فينير", onClick: () => selectService("فينير", "12000") }
-  ]);
+function showMainServices() {
+    addButtons([
+        { text: "💰 الأسعار", onClick: () => selectService("كشف", "350") },
+        { text: "💍 عرض العروسة", onClick: () => selectService("عروسة", "4000") },
+        { text: "🦷 تجميل الأسنان", onClick: () => selectService("تبييض", "6000") },
+        { text: "📏 التقويم", onClick: () => selectService("تقويم", "400") },
+        { text: "🚨 طوارئ", onClick: () => selectService("طوارئ", "1200") }
+    ]);
 }
 
-function selectService(name, price) {
-  selectedService = name;
-  addMessage(`الخدمة: ${name} 💎 السعر يبدأ من ${price}`);
-  addButtons([{ text: "احجز الآن", onClick: showForm }]);
+async function selectService(name, price) {
+    selectedService = name;
+    addMessage(`خدمة ${name}: السعر يبدأ من ${price} ج.م 👌`, "bot");
+    addButtons([{ text: "حجز موعد الآن", onClick: showForm }]);
 }
 
-// 🔥 الفورم بعد الإصلاح
 function showForm() {
-  addMessage(`
-    <div id="bookingForm">
-      <input id="name" placeholder="الاسم بالكامل">
-
-      <select id="country">
-        <option value="+20">🇪🇬 مصر</option>
-        <option value="+966">🇸🇦 السعودية</option>
-        <option value="+971">🇦🇪 الإمارات</option>
-      </select>
-
-      <input id="phone" placeholder="رقم الهاتف">
-
-      <button id="submitBtn">تأكيد الحجز</button>
-    </div>
-  `);
-
-  setTimeout(() => {
-    document.getElementById("submitBtn").onclick = submitBooking;
-  }, 100);
+    addMessage("من فضلك ادخل بياناتك لنتواصل معك وتأكيد الحجز:");
+    const formDiv = document.createElement("div");
+    formDiv.className = "form-container";
+    formDiv.innerHTML = `
+        <input id="userName" placeholder="الاسم الثلاثي">
+        <select id="countryCode">
+            <option value="+20">🇪🇬 مصر (+20)</option>
+            <option value="+966">🇸🇦 السعودية (+966)</option>
+        </select>
+        <input id="userPhone" type="tel" placeholder="رقم الموبايل">
+        <button class="submit-btn" onclick="submitBooking()">تأكيد الحجز ✅</button>
+    `;
+    document.getElementById("chatBox").appendChild(formDiv);
+    document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
 }
 
-// 🔥 Validation + أسباب الرفض
-function validate(name, phone) {
-  if (name.length < 3) {
-    return "❌ الاسم لازم يكون 3 حروف على الأقل";
-  }
-
-  if (!/^[a-zA-Z\u0600-\u06FF\s]+$/.test(name)) {
-    return "❌ الاسم لازم يكون حروف فقط بدون أرقام";
-  }
-
-  if (!/^[0-9]{8,15}$/.test(phone)) {
-    return "❌ رقم الهاتف لازم يكون من 8 لـ 15 رقم";
-  }
-
-  return null;
-}
-
-// إرسال الحجز
 async function submitBooking() {
-  const name = document.getElementById("name")?.value.trim();
-  const phone = document.getElementById("phone")?.value.trim();
-  const code = document.getElementById("country")?.value;
+    const name = document.getElementById("userName").value.trim();
+    const phone = document.getElementById("userPhone").value.trim();
+    const code = document.getElementById("countryCode").value;
 
-  const error = validate(name, phone);
+    if(name.length < 3 || phone.length < 10) {
+        alert("يرجى إدخال بيانات صحيحة");
+        return;
+    }
 
-  if (error) {
-    addMessage(error);
-    return;
-  }
-
-  const fullPhone = code + phone;
-
-  addMessage("⏳ جاري إرسال البيانات...");
-
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        message: `name: ${name} phone: ${fullPhone} service: ${selectedService}`
-      })
-    });
-
-    const data = await res.json();
-
-    addMessage(data.reply || "تم الحجز ✅");
-
-  } catch (e) {
-    addMessage("❌ حصل خطأ في الاتصال بالسيرفر");
-  }
+    addMessage(`الاسم: ${name}\nالهاتف: ${code}${phone}`, "user");
+    
+    try {
+        const res = await fetch(API_URL, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ message: `حجز خدمة ${selectedService} للاسم ${name} هاتف ${code}${phone}` })
+        });
+        const data = await res.json();
+        addMessage(data.reply);
+    } catch (e) {
+        addMessage("عذراً، حدث خطأ في الاتصال. حاول مرة أخرى.");
+    }
 }
 
-// رسالة عادية
 async function sendMessage() {
-  const input = document.getElementById("messageInput");
-  const msg = input.value;
+    const input = document.getElementById("messageInput");
+    const msg = input.value.trim();
+    if (!msg) return;
 
-  if (!msg) return;
+    addMessage(msg, "user");
+    input.value = "";
 
-  // ✅ هنا التعديل
-  if (msg.includes("الم") || msg.includes("وجع") || msg.includes("سناني")) {
-    selectedService = "كشف";
-  }
-
-  addMessage(msg, "user");
-  input.value = "";
-
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ message: msg })
-  });
-
-  const data = await res.json();
-  addMessage(data.reply);
+    try {
+        const res = await fetch(API_URL, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        addMessage(data.reply);
+    } catch (e) {
+        addMessage("عذراً، أنا أواجه مشكلة في الرد حالياً.");
+    }
 }
-</script>
 
+function handleKeyPress(e) { if(e.key === 'Enter') sendMessage(); }
+</script>
 </body>
 </html>

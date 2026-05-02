@@ -27,16 +27,17 @@ client = OpenAI(
 )
 
 # =========================
-# SERVICES (ثابت واحد بس)
+# SERVICES (بيانات عيادة أوبتمم كير الحقيقية)
 # =========================
 SERVICES = {
-    "تبييض": {"price": "6000 جنيه"},
-    "فينير": {"price": "12000 جنيه"},
-    "زراعة": {"price": "8000 جنيه"},
-    "كشف": {"price": "350 جنيه"},
-    "تقويم": {"price": "400 جنيه"},
-    "طوارئ": {"price": "1200 جنيه"},
-    "ابتسامة": {"price": "2000 جنيه"}
+    "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
+    "فينير": {"price": "12000 جنيه", "link": "https://setmore.com"},
+    "زراعة": {"price": "8000 جنيه", "link": "https://setmore.com"},
+    "كشف": {"price": "350 جنيه", "link": "https://setmore.com"},
+    "تقويم": {"price": "400 جنيه", "link": "https://setmore.com"},
+    "طوارئ": {"price": "1200 جنيه", "link": "https://setmore.com"},
+    "ابتسامة": {"price": "2000 جنيه", "link": "https://setmore.com"},
+    "عروسة": {"price": "4000 جنيه", "link": "https://setmore.com"}
 }
 
 # =========================
@@ -45,19 +46,11 @@ SERVICES = {
 def init_db():
     conn = sqlite3.connect("clients.db")
     c = conn.cursor()
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        phone TEXT,
-        service TEXT,
-        tag TEXT,
-        status TEXT,
-        created_at TEXT
-    )
-    """)
-
+        name TEXT, phone TEXT, service TEXT, tag TEXT, status TEXT, created_at TEXT
+    )""")
     conn.commit()
     conn.close()
 
@@ -66,12 +59,10 @@ init_db()
 def save_client(name, phone, service, tag):
     conn = sqlite3.connect("clients.db")
     c = conn.cursor()
-
     c.execute(
         "INSERT INTO clients (name, phone, service, tag, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (name, phone, service, tag, "جديد", datetime.now().strftime("%Y-%m-%d %H:%M"))
     )
-
     conn.commit()
     conn.close()
 
@@ -90,7 +81,7 @@ def validate_phone(phone):
 user_states = {}
 
 # =========================
-# AI
+# AI (شخصية أوبتمم كير)
 # =========================
 def ask_ai(user_text):
     try:
@@ -99,188 +90,107 @@ def ask_ai(user_text):
             messages=[
                 {
                     "role": "system",
-                    "content": """
-حدد الخدمة فقط من:
-تبييض - فينير - زراعة - كشف
-
-ارجع JSON فقط:
-{
-"service": "اسم الخدمة",
-"tag": "ألم أو تجميل أو زراعة"
-}
-"""
+                    "content": """أنت مساعد عيادة Optimum Care Dental Clinic (د. هبة عمار). 
+                    حدد الخدمة فقط من: تبييض - فينير - زراعة - كشف - تقويم - طوارئ - ابتسامة - عروسة.
+                    أرجع JSON فقط: {"service": "اسم الخدمة", "tag": "تجميل أو علاج"}"""
                 },
                 {"role": "user", "content": user_text}
             ]
         )
-
-        content = completion.choices[0].message.content
-        return json.loads(content)
-
+        return json.loads(completion.choices[0].message.content)
     except:
-        return {
-            "service": "كشف",
-            "tag": "ألم"
-        }
+        return {"service": "كشف", "tag": "علاج"}
 
 # =========================
-# SALES
+# SALES REPLY
 # =========================
 def build_sales_reply(service):
-    data = SERVICES.get(service)
-
-    if not data:
-        service = "كشف"
-        data = SERVICES["كشف"]
-
-    return f"""
-تمام 👌
-
-الخدمة: {service} 💎  
-السعر: {data['price']}  
-
-🔥 الأماكن محدودة اليومين دول  
-والحجز بدري بيضمنلك معاد مناسب  
-
-تحب أحجزلك دلوقتي؟  
-قولّي اسمك 👇
-"""
+    data = SERVICES.get(service, SERVICES["كشف"])
+    
+    reply = f"بكل سرور! في عيادة أوبتمم كير (د. هبة عمار) نقدم خدمة {service} بأعلى معايير التعقيم.\n\n"
+    reply += f"💰 السعر: {data['price']}\n"
+    reply += "📍 مدينة نصر، أرض الجولف.\n"
+    reply += "🕒 مواعيدنا: الأحد للأربعاء (3:30م - 9:30م).\n\n"
+    reply += "تحب أحجزلك ميعاد استشارة؟ قولّي اسمك الثلاثي 👇"
+    return reply
 
 # =========================
-# HOME
+# ROUTES
 # =========================
 @app.route("/")
 def home():
     return send_from_directory(".", "index.html")
 
-# =========================
-# CHAT
-# =========================
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
-    msg = data.get("message")
-
-    if not msg:
-        return jsonify({"error": "No message"}), 400
-
-    lower = msg.lower()
+    msg = data.get("message", "")
     user_id = request.remote_addr
 
     if user_id not in user_states:
-        user_states[user_id] = {
-            "step": "start",
-            "service": None,
-            "name": None,
-        }
+        user_states[user_id] = {"step": "start", "service": None, "name": None}
 
     state = user_states[user_id]
+    lower = msg.lower()
 
-    # =====================
-    # 👋 Greeting
-    # =====================
-    if state["step"] == "start" and any(x in lower for x in ["السلام", "اهلا", "hi", "hello"]):
-        state["step"] = "ask_service"
-        return jsonify({"reply": "أهلاً 👋 قولّي المشكلة أو اختار خدمة"})
+    # 👋 الترحيب
+    if state["step"] == "start" or any(x in lower for x in ["سلام", "اهلا", "hi", "بكام"]):
+        if state["step"] == "start":
+            state["step"] = "ask_service"
+            return jsonify({"reply": "أهلاً بك في عيادة Optimum Care (د. هبة عمار) 🦷✨\nأنا مساعدك الذكي، كيف يمكنني مساعدتك اليوم؟ يمكنك السؤال عن الأسعار أو الخدمات."})
 
-    # =====================
     # 🧠 تحديد الخدمة
-    # =====================
-    if state["step"] in ["start", "ask_service"] and state["service"] is None:
-
+    if state["step"] == "ask_service":
         ai = ask_ai(msg)
-        service = ai.get("service", "كشف")
+        state["service"] = ai.get("service", "كشف")
+        state["step"] = "ask_name"
+        return jsonify({"reply": build_sales_reply(state["service"])})
 
-        state["service"] = service
-        state["step"] = "ask_name"   # 🔥 أهم سطر
-
-        reply = build_sales_reply(service)
-
-        send_to_telegram(f"💬 {msg}\n🦷 {service}")
-
-        return jsonify({"reply": reply})
-
-    # =====================
     # 👤 الاسم
-    # =====================
     if state["step"] == "ask_name":
-
         if not validate_name(msg):
-            return jsonify({"reply": "❌ الاسم لازم يكون 3 حروف على الأقل"})
-
+            return jsonify({"reply": "❌ يرجى كتابة الاسم الثلاثي بشكل صحيح."})
         state["name"] = msg
         state["step"] = "ask_phone"
+        return jsonify({"reply": f"تشرفنا يا {msg}! ممكن رقم موبايلك للتواصل؟ 📞"})
 
-        return jsonify({"reply": "تمام 👍 ابعت رقمك 📞"})
-
-    # =====================
-    # 📞 الهاتف
-    # =====================
+    # 📞 الهاتف والحجز النهائي
     if state["step"] == "ask_phone":
-
         if not validate_phone(msg):
-            return jsonify({"reply": "❌ رقم غير صحيح (مثال: 010xxxxxxxx)"})
+            return jsonify({"reply": "❌ عذراً، رقم الهاتف غير صحيح. (مثال: 010xxxxxxxx)"})
+        
+        service_data = SERVICES.get(state["service"], SERVICES["كشف"])
+        save_client(state["name"], msg, state["service"], "AI_Lead")
+        
+        send_to_telegram(f"🔥 حجز جديد!\n👤 {state['name']}\n📞 {msg}\n🦷 {state['service']}")
 
-        name = state["name"]
-        phone = msg
-        service = state["service"]
+        final_reply = f"تم تسجيل طلبك بنجاح يا {state['name']}! ✅\n\n"
+        final_reply += f"يمكنك تأكيد حجزك فوراً من خلال رابط العيادة المباشر: \n{service_data['link']}\n\n"
+        final_reply += "وسيقوم فريق الاستقبال بالتواصل معك قريباً."
+        
+        user_states[user_id] = {"step": "start", "service": None, "name": None} # Reset
+        return jsonify({"reply": final_reply})
 
-        ai = ask_ai(service)
-        tag = ai.get("tag", "غير معروف")
+    return jsonify({"reply": "عذراً، هل يمكنك توضيح طلبك؟"})
 
-        save_client(name, phone, service, tag)
-
-        send_to_telegram(
-            f"🔥 عميل جديد\n👤 {name}\n📞 {phone}\n🦷 {service}\n🏷 {tag}"
-        )
-
-        # ✅ أهم سطرين
-        state["step"] = "done"
-        state["service"] = None
-        state["name"] = None
-
-        return jsonify({
-            "reply": "🔥 تم الحجز! هنتواصل معاك خلال دقائق"
-        })
 # =========================
-# ADMIN
+# TELEGRAM & ADMIN
 # =========================
+def send_to_telegram(text):
+    if ADMIN_CHAT_ID:
+        try:
+            requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                          json={"chat_id": ADMIN_CHAT_ID, "text": text}, timeout=5)
+        except: pass
+
 @app.route("/admin")
 def admin():
     conn = sqlite3.connect("clients.db")
-    c = conn.cursor()
-
-    c.execute("SELECT name, phone, service, tag, status FROM clients ORDER BY id DESC")
-    rows = c.fetchall()
+    rows = conn.execute("SELECT name, phone, service, created_at FROM clients ORDER BY id DESC").fetchall()
     conn.close()
+    html = "<h2>📋 حجوزات عيادة أوبتمم كير</h2><table border=1 cellpadding=10><tr><th>الاسم</th><th>الهاتف</th><th>الخدمة</th><th>التاريخ</th></tr>"
+    for r in rows: html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td></tr>"
+    return html + "</table>"
 
-    html = "<h2>📋 العملاء</h2><table border=1 cellpadding=10>"
-
-    for r in rows:
-        html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>"
-
-    html += "</table>"
-    return html
-
-# =========================
-# TELEGRAM
-# =========================
-def send_message(chat_id, text):
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
-            timeout=10
-        )
-    except:
-        pass
-
-def send_to_telegram(text):
-    if ADMIN_CHAT_ID:
-        send_message(ADMIN_CHAT_ID, text)
-
-# =========================
-# RUN
-# =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
