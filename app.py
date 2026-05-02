@@ -133,10 +133,44 @@ def chat():
     state = user_states[user_id]
     lower = msg.lower()
 
+    # 1. الترحيب الذكي (كما فعلنا سابقاً)
+    greeting_keywords = ["السلام عليكم", "سلام", "اهلا", "صباح الخير", "مساء الخير", "hi", "hello"]
+    if state["step"] == "start" and any(x in lower for x in greeting_keywords):
+        state["step"] = "ask_service"
+        reply_intro = "وعليكم السلام ورحمة الله وبركاته! أهلاً بك في عيادة أوبتمم كير. ✨" if "السلام عليكم" in lower else "أهلاً بك في عيادة أوبتمم كير! 😊"
+        return jsonify({"reply": f"{reply_intro}\nأنا مساعدك الذكي، موجود هنا للإجابة على أسعارنا وخدماتنا. كيف يمكنني مساعدتك اليوم؟"})
+
+    # 2. فهم "الشكوى" أو "الخدمة" باستخدام الذكاء الاصطناعي (حل مشكلة الصورة)
+    if state["step"] == "ask_service":
+        ai = ask_ai(msg)
+        service = ai.get("service")
+        
+        # إذا فهم الـ AI أن هناك ألم أو خدمة معينة
+        if service and service in SERVICES:
+            state["service"] = service
+            state["step"] = "ask_name"
+            return jsonify({"reply": build_sales_reply(service)})
+        else:
+            # إذا لم يفهم الـ AI، بدلاً من "عذراً"، نسأله بطريقة ألطف
+            return jsonify({"reply": "سلامتك! هل تقصد أنك تعاني من ألم وتريد حجز (كشف طوارئ) أم تستفسر عن خدمات التجميل مثل التبييض والتقويم؟"})
+
+    # 3. إكمال مسار الاسم والهاتف (كما هو في الكود السابق)
+    if state["step"] == "ask_name":
+        if not validate_name(msg):
+            return jsonify({"reply": "❌ يرجى كتابة الاسم بشكل صحيح (3 حروف فأكثر)."})
+        state["name"] = msg
+        state["step"] = "ask_phone"
+        return jsonify({"reply": f"تشرفنا يا {msg}! ممكن رقم موبايلك ليتواصل معك فريق الاستقبال؟ 📞"})
+
+    if state["step"] == "ask_phone":
+        if not validate_phone(msg):
+            return jsonify({"reply": "❌ رقم الهاتف غير صحيح. يرجى إدخاله بشكل صحيح."})
+        # ... تكملة كود الحفظ وإرسال تليجرام ...
+
     # =====================
     # 👋 الترحيب الذكي (Human-like Greeting)
     # =====================
-    
+
     # مصفوفة للتحيات الشائعة
     greeting_keywords = ["السلام عليكم", "سلام", "اهلا", "صباح الخير", "مساء الخير", "hi", "hello"]
     
