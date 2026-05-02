@@ -186,7 +186,7 @@ def chat():
     # =====================
     # 🧠 تحديد الخدمة
     # =====================
-    if state["step"] in ["start", "ask_service"]:
+    if state["step"] in ["start", "ask_service"] and state["service"] is None:
 
         ai = ask_ai(msg)
         service = ai.get("service", "كشف")
@@ -234,15 +234,14 @@ def chat():
             f"🔥 عميل جديد\n👤 {name}\n📞 {phone}\n🦷 {service}\n🏷 {tag}"
         )
 
+        # ✅ أهم سطرين
         state["step"] = "done"
+        state["service"] = None
+        state["name"] = None
 
-        return jsonify({"reply": "🔥 تم الحجز! هنتواصل معاك خلال دقائق"})
-
-    # =====================
-    # DONE
-    # =====================
-    return jsonify({"reply": "تم تسجيلك بالفعل ✅ لو عايز حاجة تانية قولّي 👌"})
-
+        return jsonify({
+            "reply": "🔥 تم الحجز! هنتواصل معاك خلال دقائق"
+        })
 # =========================
 # ADMIN
 # =========================
