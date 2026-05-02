@@ -33,7 +33,7 @@ def get_reply(msg):
     return "ممكن تقولي نوع الخدمة؟ (تبييض - زراعة - فينير)"
 
 # ----------------------------
-# حفظ البيانات (Safe)
+# Save Lead (Safe)
 # ----------------------------
 def save_lead(name, phone):
     try:
@@ -48,31 +48,25 @@ def save_lead(name, phone):
 # ----------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
-    try:
-        data = request.get_json(silent=True) or {}
-        msg = data.get("message", "")
+    data = request.get_json(silent=True) or {}
+    msg = data.get("message", "")
 
-        # لو المستخدم بعت بياناته
-        if "name:" in msg and "phone:" in msg:
-            try:
-                name = msg.split("name:")[1].split(",")[0].strip()
-                phone = msg.split("phone:")[1].strip()
+    if "name:" in msg and "phone:" in msg:
+        try:
+            name = msg.split("name:")[1].split(",")[0].strip()
+            phone = msg.split("phone:")[1].strip()
 
-                save_lead(name, phone)
+            save_lead(name, phone)
 
-                return jsonify({"reply": "تم الحجز ✅ هنتواصل معاك قريب"})
-            except:
-                return jsonify({"reply": "حصل خطأ، ابعت البيانات بالشكل ده:\nname: محمد, phone: 010..."})
+            return jsonify({"reply": "تم الحجز ✅ هنتواصل معاك قريب"})
+        except:
+            return jsonify({"reply": "حصل خطأ، ابعت البيانات بالشكل ده:\nname: محمد, phone: 010..."})
 
-        reply = get_reply(msg)
-        return jsonify({"reply": reply})
-
-    except Exception as e:
-        print("Error in /chat:", e)
-        return jsonify({"reply": "حصل خطأ في السيرفر، حاول تاني بعد شوية"}), 500
+    reply = get_reply(msg)
+    return jsonify({"reply": reply})
 
 # ----------------------------
-# تشغيل السيرفر
+# Run
 # ----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
