@@ -1,15 +1,16 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 import csv
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
 # ----------------------------
-# الصفحة الرئيسية
+# Home Route (المهم جداً)
 # ----------------------------
 @app.route("/")
 def home():
-    return send_from_directory(".", "index.html")
+    return "Dental Bot API is running 🚀"
 
 # ----------------------------
 # Knowledge Base
@@ -47,6 +48,7 @@ def chat():
     data = request.json
     msg = data.get("message", "")
 
+    # لو المستخدم بعت بياناته
     if "name:" in msg and "phone:" in msg:
         try:
             name = msg.split("name:")[1].split(",")[0].strip()
@@ -61,6 +63,9 @@ def chat():
     reply = get_reply(msg)
     return jsonify({"reply": reply})
 
-
+# ----------------------------
+# تشغيل السيرفر (مهم لـ Railway)
+# ----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
