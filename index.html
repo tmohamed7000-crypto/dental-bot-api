@@ -63,10 +63,10 @@ body {
   border-top: 1px solid #ddd;
 }
 
-input, select {
-  width: 100%;
-  padding: 8px;
-  margin-top: 5px;
+input {
+  flex: 1;
+  padding: 10px;
+  border: none;
 }
 
 button.send {
@@ -76,8 +76,8 @@ button.send {
   padding: 10px;
 }
 </style>
-
 </head>
+
 <body>
 
 <div class="chat-container">
@@ -91,11 +91,11 @@ button.send {
 </div>
 
 <script>
-const API_URL = "https://dental-bot-api-production-106b.up.railway.app/chat";
-const BOOK_URL = "https://dental-bot-api-production-106b.up.railway.app/book";
+const API_URL = "https://YOUR-RAILWAY-URL/chat";
 
 let selectedService = "";
 
+// رسائل
 function addMessage(text, type="bot") {
   const box = document.getElementById("chatBox");
   const div = document.createElement("div");
@@ -105,9 +105,11 @@ function addMessage(text, type="bot") {
   box.scrollTop = box.scrollHeight;
 }
 
+// أزرار
 function addButtons(buttons) {
   const box = document.getElementById("chatBox");
   const div = document.createElement("div");
+  div.className = "buttons";
 
   buttons.forEach(btn => {
     const b = document.createElement("button");
@@ -119,86 +121,48 @@ function addButtons(buttons) {
   box.appendChild(div);
 }
 
+// بداية
 window.onload = () => {
-  addMessage("أهلاً بيك 👋\nاختار الخدمة:");
-  showMainServices();
+  addMessage("أهلاً 👋 اختر الخدمة:");
+  showServices();
 };
 
-function showMainServices() {
+function showServices() {
   addButtons([
-    { text: "تبييض الأسنان", onClick: () => selectService("تبييض", "6000 جنيه") },
-    { text: "زراعة الأسنان", onClick: () => selectService("زراعة", "8000 جنيه") },
-    { text: "تقويم الأسنان", onClick: () => selectService("تقويم", "4000 جنيه") },
-    { text: "عرض المزيد", onClick: showMore }
-  ]);
-}
-
-function showMore() {
-  addButtons([
-    { text: "فينير", onClick: () => selectService("فينير", "12000 جنيه") },
-    { text: "علاج جذور", onClick: () => selectService("حشو عصب", "1500 جنيه") }
+    { text: "تبييض", onClick: () => selectService("تبييض", "6000") },
+    { text: "زراعة", onClick: () => selectService("زراعة", "8000") },
+    { text: "فينير", onClick: () => selectService("فينير", "12000") }
   ]);
 }
 
 function selectService(name, price) {
   selectedService = name;
-  addMessage(`الخدمة: ${name} 💎\nالسعر يبدأ من ${price}`);
-  
-  addButtons([
-    { text: "احجز الآن", onClick: showBookingForm }
-  ]);
+  addMessage(`الخدمة: ${name} 💎 السعر يبدأ من ${price}`);
+  addButtons([{ text: "احجز الآن", onClick: showForm }]);
 }
 
-function showBookingForm() {
-  const html = `
-    <div>
-      <input id="name" placeholder="الاسم بالكامل">
-
-      <select id="country">
-        <option value="+20">🇪🇬 مصر</option>
-        <option value="+966">🇸🇦 السعودية</option>
-        <option value="+971">🇦🇪 الإمارات</option>
-      </select>
-
-      <input id="phone" placeholder="رقم الهاتف">
-
-      <button onclick="submitBooking()">تأكيد الحجز</button>
-    </div>
-  `;
-  addMessage(html);
+function showForm() {
+  addMessage(`
+    <input id="name" placeholder="الاسم"><br><br>
+    <input id="phone" placeholder="رقم الهاتف"><br><br>
+    <button onclick="submitBooking()">تأكيد</button>
+  `);
 }
 
 async function submitBooking() {
   const name = document.getElementById("name").value;
   const phone = document.getElementById("phone").value;
-  const code = document.getElementById("country").value;
 
-  const fullPhone = code + phone;
-
-  if (!name || !phone) {
-    addMessage("من فضلك اكتب الاسم ورقم الهاتف 🙏");
-    return;
-  }
-
-  addMessage("جاري تأكيد الحجز ⏳", "user");
-
-  const res = await fetch(BOOK_URL, {
+  const res = await fetch(API_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      name: name,
-      phone: fullPhone,
-      service: selectedService
+      message: `name: ${name} phone: ${phone} service: ${selectedService}`
     })
   });
 
   const data = await res.json();
-
-  if (data.message) {
-    addMessage("تم الحجز بنجاح ✅");
-  } else {
-    addMessage("حصل خطأ 😢");
-  }
+  addMessage(data.reply);
 }
 
 async function sendMessage() {
