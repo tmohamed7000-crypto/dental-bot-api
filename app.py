@@ -10,7 +10,10 @@ app = Flask(__name__)
 # =========================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if TELEGRAM_CHAT_ID:
+    TELEGRAM_CHAT_ID = int(TELEGRAM_CHAT_ID)
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -18,7 +21,7 @@ client = OpenAI(
 )
 
 # =========================
-# 🔥 SYSTEM PROMPT (بيع + حجز)
+# SYSTEM PROMPT
 # =========================
 SYSTEM_PROMPT = """
 أنت موظف استقبال محترف في Optimum Care Dental Clinic.
@@ -32,32 +35,26 @@ SYSTEM_PROMPT = """
 - مقنع
 
 الخدمات:
-- تبييض الأسنان: 6000 جنيه (تفتيح حتى 7 درجات)
+- تبييض الأسنان: 6000 جنيه
 - فينير: من 12000 جنيه
 - زراعة: من 8000 جنيه
 
-قواعد مهمة:
-- أي عميل يسأل عن خدمة → رد مختصر + السعر
-- بعدها مباشرة اطلب بياناته
-- لازم تطلب:
-name:
-phone:
-
-مثال:
-تبييض الأسنان عندنا يبدأ من 6000 جنيه ✨
-
-احجزلك معاد؟ ابعتلي:
+قواعد:
+- رد قصير + سعر
+- بعدها اطلب:
 name:
 phone:
 """
 
+# =========================
+# HOME
+# =========================
 @app.route("/")
 def home():
     return "Bot is running 🚀"
 
-
 # =========================
-# API للتجربة (ReqBin)
+# CHAT API (لـ HTML)
 # =========================
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -65,30 +62,22 @@ def chat():
     user_message = data.get("message")
 
     if not user_message:
-        return jsonify({"error": "No message provided"}), 400
+        return jsonify({"error": "No message"}), 400
 
     try:
-        completion = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message}
-            ]
-        )
+        reply = ask_ai(user_message)
 
-        reply = completion.choices[0].message.content
-
-        # إرسال لوج للعيادة
+        # لوج للعيادة
         send_to_telegram(f"💬 User: {user_message}\n🤖 Bot: {reply}")
 
         return jsonify({"reply": reply})
 
     except Exception as e:
+        print("CHAT ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-
 # =========================
-# Telegram Webhook
+# TELEGRAM WEBHOOK
 # =========================
 @app.route("/telegram", methods=["POST"])
 def telegram_webhook():
@@ -100,49 +89,55 @@ def telegram_webhook():
 
         message = data["message"]
         chat_id = message["chat"]["id"]
-        text = message.get("text", "")
+        text = message.get("text", "").strip()
 
         if not text:
             return "ok"
 
         lower_text = text.lower()
 
-        # 🔥 لو العميل بعت بياناته
+        # =====================
+        # ✅ بيانات حجز
+        # =====================
         if "name:" in lower_text and "phone:" in lower_text:
 
-            # رد للعميل
             send_message(chat_id, "تم الحجز ✅ هنكلمك قريب")
 
-            # إرسال للعيادة
-            send_message(
-                ADMIN_CHAT_ID,
+            send_to_telegram(
                 f"📥 عميل جديد:\n{text}\n\nChat ID: {chat_id}"
             )
 
             return "ok"
 
-        # 🤖 رد AI
-        completion = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text}
-            ]
-        )
-
-        reply = completion.choices[0].message.content
+        # =====================
+        # 🤖 AI رد
+        # =====================
+        reply = ask_ai(text)
 
         send_message(chat_id, reply)
 
     except Exception as e:
-        print("Error:", e)
+        print("TELEGRAM ERROR:", e)
         send_message(chat_id, "حصل خطأ 😢 حاول تاني")
 
     return "ok"
 
+# =========================
+# AI FUNCTION
+# =========================
+def ask_ai(user_text):
+    completion = client.chat.completions.create(
+        model="openai/gpt-4o-mini",  # 🔥 أفضل وأرخص على OpenRouter
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_text}
+        ]
+    )
+
+    return completion.choices[0].message.content
 
 # =========================
-# إرسال رسالة تيليجرام
+# SEND TELEGRAM MESSAGE
 # =========================
 def send_message(chat_id, text):
     try:
@@ -151,21 +146,23 @@ def send_message(chat_id, text):
             json={
                 "chat_id": chat_id,
                 "text": text
-            }
+            },
+            timeout=10
         )
     except Exception as e:
-        print("Telegram Error:", e)
-
+        print("SEND MSG ERROR:", e)
 
 # =========================
-# لوج للعيادة
+# ADMIN LOG
 # =========================
 def send_to_telegram(text):
-    if not ADMIN_CHAT_ID:
+    if not TELEGRAM_CHAT_ID:
         return
 
-    send_message(ADMIN_CHAT_ID, text)
+    send_message(TELEGRAM_CHAT_ID, text)
 
-
+# =========================
+# RUN
+# =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
