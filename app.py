@@ -90,15 +90,28 @@ def ask_ai(user_text):
             messages=[
                 {
                     "role": "system",
-                    "content": """أنت مساعد عيادة Optimum Care Dental Clinic (د. هبة عمار). 
-                    حدد الخدمة فقط من: تبييض - فينير - زراعة - كشف - تقويم - طوارئ - ابتسامة - عروسة.
-                    أرجع JSON فقط: {"service": "اسم الخدمة", "tag": "تجميل أو علاج"}"""
+                    "content": """أنت خبير تصنيف لعيادة أسنان. مهمتك فهم نية المستخدم وتحويلها لخدمة محددة.
+                    
+                    [قواعد التصنيف]:
+                    - إذا ذكر (ألم، وجع، ضرس بيوجعني، طوارئ) -> service: "طوارئ".
+                    - إذا ذكر (تبييض، تفتيح، لون سناني) -> service: "تبييض".
+                    - إذا ذكر (تقويم، سناني معوجة) -> service: "تقويم".
+                    - إذا ذكر (زراعة، خالع سنة، تركيب) -> service: "زراعة".
+                    - إذا ذكر (فينير، ابتسامة هوليوود) -> service: "فينير".
+                    - إذا ذكر (عرض، عروسة) -> service: "عروسة".
+                    - أي شيء آخر غير واضح -> service: "كشف".
+
+                    أرجع JSON فقط بهذا الشكل:
+                    {"service": "اسم الخدمة باللغة العربية كما هو محدد أعلاه", "tag": "تجميل أو علاج"}"""
                 },
                 {"role": "user", "content": user_text}
             ]
         )
-        return json.loads(completion.choices[0].message.content)
-    except:
+        # استخراج النص وتنظيفه من أي علامات زائدة
+        res_text = completion.choices[0].message.content.strip()
+        return json.loads(res_text)
+    except Exception as e:
+        print(f"AI Error: {e}")
         return {"service": "كشف", "tag": "علاج"}
 
 # =========================
