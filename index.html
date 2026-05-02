@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Dental Bot</title>
+</head>
+<body>
+
+<h2>Chat مع العيادة</h2>
+
+<div id="chat"></div>
+
+<input id="msg" placeholder="اكتب هنا">
+<button onclick="send()">إرسال</button>
+
+<script>
+let name = "";
+let phone = "";
+
+function send() {
+    let msg = document.getElementById("msg").value;
+
+    fetch("http://127.0.0.1:5000/chat", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            message: msg,
+            name: name,
+            phone: phone
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("chat").innerHTML += "<p><b>أنت:</b> " + msg + "</p>";
+        document.getElementById("chat").innerHTML += "<p><b>البوت:</b> " + data.reply + "</p>";
+
+        // لو قال ابعت اسمك
+        if (data.reply.includes("اسمك")) {
+            name = prompt("ادخل اسمك");
+            phone = prompt("ادخل رقمك");
+
+            fetch("http://127.0.0.1:5000/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    name: name,
+                    phone: phone
+                })
+            })
+            .then(res => res.json())
+            .then(d => {
+                document.getElementById("chat").innerHTML += "<p><b>البوت:</b> " + d.reply + "</p>";
+            });
+        }
+    });
+
+    document.getElementById("msg").value = "";
+}
+</script>
+
+</body>
+</html>
