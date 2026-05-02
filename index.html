@@ -64,7 +64,7 @@ input, button {
 </div>
 
 <script>
-const API = "https://dental-bot-api-production-1c32.up.railway.app/";
+const API = "https://dental-bot-api-production-1c32.up.railway.app/chat"; // ✅ صح
 
 function addMessage(text, type) {
     let chat = document.getElementById("chat");
@@ -74,6 +74,8 @@ function addMessage(text, type) {
 
 function send() {
     let msg = document.getElementById("msg").value;
+
+    if (!msg) return;
 
     addMessage("أنت: " + msg, "user");
 
@@ -86,10 +88,13 @@ function send() {
     .then(data => {
         addMessage("البوت: " + data.reply, "bot");
 
-        // لو فيه كلمة حجز → يظهر الفورم
         if (data.reply.includes("ابعت") || data.reply.includes("حجز")) {
             document.getElementById("booking").style.display = "block";
         }
+    })
+    .catch(err => {
+        addMessage("⚠️ حصل خطأ في الاتصال", "bot");
+        console.error(err);
     });
 
     document.getElementById("msg").value = "";
@@ -98,6 +103,11 @@ function send() {
 function book() {
     let name = document.getElementById("name").value;
     let phone = document.getElementById("phone").value;
+
+    if (!name || !phone) {
+        alert("اكتب الاسم ورقم الموبايل");
+        return;
+    }
 
     fetch(API, {
         method: "POST",
@@ -110,6 +120,10 @@ function book() {
     .then(data => {
         addMessage("البوت: " + data.reply, "bot");
         document.getElementById("booking").style.display = "none";
+    })
+    .catch(err => {
+        addMessage("⚠️ فشل الحجز", "bot");
+        console.error(err);
     });
 }
 </script>
