@@ -133,11 +133,29 @@ def chat():
     state = user_states[user_id]
     lower = msg.lower()
 
-    # 👋 الترحيب
-    if state["step"] == "start" or any(x in lower for x in ["سلام", "اهلا", "hi", "بكام"]):
+    # =====================
+    # 👋 الترحيب الذكي (Human-like Greeting)
+    # =====================
+    
+    # مصفوفة للتحيات الشائعة
+    greeting_keywords = ["السلام عليكم", "سلام", "اهلا", "صباح الخير", "مساء الخير", "hi", "hello"]
+    
+    if any(x in lower for x in greeting_keywords):
+        # الرد الإنساني بناءً على التحية
+        if "السلام عليكم" in lower:
+            reply_intro = "وعليكم السلام ورحمة الله وبركاته! أهلاً بك في عيادة أوبتمم كير. ✨"
+        elif "صباح" in lower:
+            reply_intro = "صباح النور والجمال! أهلاً بك في عيادتنا. ☀️"
+        else:
+            reply_intro = "أهلاً بك! نورت عيادة أوبتمم كير (د. هبة عمار). 😊"
+
+        # إذا كانت هذه أول مرة يتكلم فيها، نغير الحالة ونعرض الخدمات
         if state["step"] == "start":
             state["step"] = "ask_service"
-            return jsonify({"reply": "أهلاً بك في عيادة Optimum Care (د. هبة عمار) 🦷✨\nأنا مساعدك الذكي، كيف يمكنني مساعدتك اليوم؟ يمكنك السؤال عن الأسعار أو الخدمات."})
+            return jsonify({"reply": f"{reply_intro}\nأنا مساعدك الذكي، موجود هنا للإجابة على أسعارنا وخدماتنا. كيف يمكنني مساعدتك اليوم؟"})
+        else:
+            # إذا كان سلم مرة تانية في نص الكلام، نرد عليه بذوق ونذكره بالخطوة الحالية
+            return jsonify({"reply": f"{reply_intro} كيف يمكنني مساعدتك الآن؟"})
 
     # 🧠 تحديد الخدمة
     if state["step"] == "ask_service":
