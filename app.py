@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from openai import OpenAI
 import requests
 
@@ -49,14 +49,12 @@ phone:
 # =========================
 # HOME
 # =========================
-from flask import send_from_directory
-
 @app.route("/")
 def home():
     return send_from_directory(".", "index.html")
 
 # =========================
-# CHAT API (لـ HTML)
+# CHAT API
 # =========================
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -79,57 +77,32 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 # =========================
-# TELEGRAM WEBHOOK
+# 🔥 BOOKING API (الأهم)
 # =========================
-@app.route("/telegram", methods=["POST"])
-def telegram_webhook():
+@app.route("/book", methods=["POST"])
+def book():
     data = request.json
 
-    try:
-        if "message" not in data:
-            return "ok"
+    name = data.get("name")
+    phone = data.get("phone")
+    service = data.get("service", "غير محدد")
 
-        message = data["message"]
-        chat_id = message["chat"]["id"]
-        text = message.get("text", "").strip()
+    if not name or not phone:
+        return jsonify({"error": "Missing data"}), 400
 
-        if not text:
-            return "ok"
+    # إرسال للعيادة
+    send_to_telegram(
+        f"📥 حجز جديد:\n👤 الاسم: {name}\n📞 الرقم: {phone}\n🦷 الخدمة: {service}"
+    )
 
-        lower_text = text.lower()
-
-        # =====================
-        # ✅ بيانات حجز
-        # =====================
-        if "name:" in lower_text and "phone:" in lower_text:
-
-            send_message(chat_id, "تم الحجز ✅ هنكلمك قريب")
-
-            send_to_telegram(
-                f"📥 عميل جديد:\n{text}\n\nChat ID: {chat_id}"
-            )
-
-            return "ok"
-
-        # =====================
-        # 🤖 AI رد
-        # =====================
-        reply = ask_ai(text)
-
-        send_message(chat_id, reply)
-
-    except Exception as e:
-        print("TELEGRAM ERROR:", e)
-        send_message(chat_id, "حصل خطأ 😢 حاول تاني")
-
-    return "ok"
+    return jsonify({"message": "تم الحجز بنجاح"})
 
 # =========================
 # AI FUNCTION
 # =========================
 def ask_ai(user_text):
     completion = client.chat.completions.create(
-        model="openai/gpt-4o-mini",  # 🔥 أفضل وأرخص على OpenRouter
+        model="openai/gpt-4o-mini",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_text}
@@ -139,7 +112,7 @@ def ask_ai(user_text):
     return completion.choices[0].message.content
 
 # =========================
-# SEND TELEGRAM MESSAGE
+# TELEGRAM SEND
 # =========================
 def send_message(chat_id, text):
     try:
@@ -152,11 +125,8 @@ def send_message(chat_id, text):
             timeout=10
         )
     except Exception as e:
-        print("SEND MSG ERROR:", e)
+        print("SEND ERROR:", e)
 
-# =========================
-# ADMIN LOG
-# =========================
 def send_to_telegram(text):
     if not TELEGRAM_CHAT_ID:
         return

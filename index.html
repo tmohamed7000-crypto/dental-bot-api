@@ -63,10 +63,10 @@ body {
   border-top: 1px solid #ddd;
 }
 
-input {
-  flex: 1;
-  padding: 10px;
-  border: none;
+input, select {
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
 }
 
 button.send {
@@ -82,7 +82,6 @@ button.send {
 
 <div class="chat-container">
   <div class="chat-header">Optimum Care Assistant</div>
-
   <div class="chat-box" id="chatBox"></div>
 
   <div class="input-area">
@@ -93,6 +92,9 @@ button.send {
 
 <script>
 const API_URL = "https://dental-bot-api-production-106b.up.railway.app/chat";
+const BOOK_URL = "https://dental-bot-api-production-106b.up.railway.app/book";
+
+let selectedService = "";
 
 function addMessage(text, type="bot") {
   const box = document.getElementById("chatBox");
@@ -106,7 +108,6 @@ function addMessage(text, type="bot") {
 function addButtons(buttons) {
   const box = document.getElementById("chatBox");
   const div = document.createElement("div");
-  div.className = "buttons";
 
   buttons.forEach(btn => {
     const b = document.createElement("button");
@@ -118,13 +119,11 @@ function addButtons(buttons) {
   box.appendChild(div);
 }
 
-// أول رسالة
 window.onload = () => {
   addMessage("أهلاً بيك 👋\nاختار الخدمة:");
   showMainServices();
 };
 
-// الخدمات الأساسية
 function showMainServices() {
   addButtons([
     { text: "تبييض الأسنان", onClick: () => selectService("تبييض", "6000 جنيه") },
@@ -134,7 +133,6 @@ function showMainServices() {
   ]);
 }
 
-// خدمات إضافية
 function showMore() {
   addButtons([
     { text: "فينير", onClick: () => selectService("فينير", "12000 جنيه") },
@@ -142,8 +140,8 @@ function showMore() {
   ]);
 }
 
-// اختيار خدمة
 function selectService(name, price) {
+  selectedService = name;
   addMessage(`الخدمة: ${name} 💎\nالسعر يبدأ من ${price}`);
   
   addButtons([
@@ -151,27 +149,25 @@ function selectService(name, price) {
   ]);
 }
 
-// فورم الحجز
 function showBookingForm() {
   const html = `
-  <div>
-    <input id="name" placeholder="الاسم بالكامل"><br><br>
+    <div>
+      <input id="name" placeholder="الاسم بالكامل">
 
-    <select id="country">
-      <option value="+20">🇪🇬 مصر</option>
-      <option value="+966">🇸🇦 السعودية</option>
-      <option value="+971">🇦🇪 الإمارات</option>
-    </select>
+      <select id="country">
+        <option value="+20">🇪🇬 مصر</option>
+        <option value="+966">🇸🇦 السعودية</option>
+        <option value="+971">🇦🇪 الإمارات</option>
+      </select>
 
-    <input id="phone" placeholder="رقم الهاتف"><br><br>
+      <input id="phone" placeholder="رقم الهاتف">
 
-    <button onclick="submitBooking()">تأكيد الحجز</button>
-  </div>
+      <button onclick="submitBooking()">تأكيد الحجز</button>
+    </div>
   `;
   addMessage(html);
 }
 
-// إرسال الحجز
 async function submitBooking() {
   const name = document.getElementById("name").value;
   const phone = document.getElementById("phone").value;
@@ -179,20 +175,32 @@ async function submitBooking() {
 
   const fullPhone = code + phone;
 
-  addMessage("تم إرسال بياناتك ✅", "user");
+  if (!name || !phone) {
+    addMessage("من فضلك اكتب الاسم ورقم الهاتف 🙏");
+    return;
+  }
 
-  await fetch(API_URL, {
+  addMessage("جاري تأكيد الحجز ⏳", "user");
+
+  const res = await fetch(BOOK_URL, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      message: `name: ${name} phone: ${fullPhone}`
+      name: name,
+      phone: fullPhone,
+      service: selectedService
     })
   });
 
-  addMessage("سيتم التواصل معك قريبًا 📞");
+  const data = await res.json();
+
+  if (data.message) {
+    addMessage("تم الحجز بنجاح ✅");
+  } else {
+    addMessage("حصل خطأ 😢");
+  }
 }
 
-// إرسال رسالة عادية
 async function sendMessage() {
   const input = document.getElementById("messageInput");
   const msg = input.value;
