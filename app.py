@@ -11,21 +11,16 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# =========================
-# ENV
-# =========================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 client = OpenAI(base_url="https://openrouter.ai", api_key=OPENROUTER_API_KEY)
 
-# =========================
-# SERVICES
-# =========================
 SERVICES = {
     "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
     "فينير": {"price": "12000 جنيه", "link": "https://setmore.com"},
+    
     "زراعة": {"price": "8000 جنيه", "link": "https://setmore.com"},
     "كشف": {"price": "350 جنيه", "link": "https://setmore.com"},
     "تقويم": {"price": "400 جنيه", "link": "https://setmore.com"},
@@ -34,46 +29,36 @@ SERVICES = {
     "عروسة": {"price": "4000 جنيه", "link": "https://setmore.com"}
 }
 
-# =========================
-# DATABASE
-# =========================
 def init_db():
     conn = sqlite3.connect("clients.db")
-    conn.execute("CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, service TEXT, status TEXT, created_at TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, service TEXT, created_at TEXT)")
     conn.commit()
     conn.close()
 
 init_db()
 
-# =========================
-# AI CORE (الفهم السياقي العميق)
-# =========================
 def ask_ai(user_text):
+    # قاعدة برمجية صارمة قبل الـ AI: أي ألم = طوارئ
+    pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور"]
+    if any(x in user_text for x in pain_keywords):
+        return {"service": "طوارئ"}
+    
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
             messages=[
-                {"role": "system", "content": """أنت مساعد استقبال ذكي في عيادة أسنان. مهمتك تحليل كلام المريض أياً كانت لغته أو ثقافته.
-                - إذا كان المريض يشتكي من أي (ألم، وجع، حساسية، كسر، عدم راحة، نزيف، ورم) -> صنفها 'طوارئ'.
-                - إذا كان المريض يسأل عن (تجميل، تحسين شكل، تفتيح لون، ابتسامة، هوليوود سمايل) -> صنفها 'تبييض' أو 'فينير' أو 'ابتسامة'.
-                - إذا كان الكلام غير واضح طبياً -> صنفها 'كشف'.
-                يجب أن تعيد JSON فقط: {"service": "اسم الخدمة باللغة العربية حصراً"}"""},
+                {"role": "system", "content": "صنف الطلب لخدمة واحدة فقط: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON: {'service': 'اسم الخدمة'}"},
                 {"role": "user", "content": user_text}
             ]
         )
-        content = completion.choices.message.content.replace("```json", "").replace("```", "").strip()
-        return json.loads(content)
+        return json.loads(completion.choices[0].message.content.replace("```json", "").replace("```", "").strip())
     except:
         return {"service": "كشف"}
 
-# =========================
-# ROUTES
-# =========================
 user_states = {}
 
 @app.route("/")
-def home():
-    return send_from_directory(".", "index.html")
+def home(): return send_from_directory(".", "index.html")
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -83,29 +68,30 @@ def chat():
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
 
-    # منطق التحية الذكي
-    if any(x in msg.lower() for x in ["سلام", "اهلا", "صباح", "مساء", "hi", "hello"]):
-        return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير (د. هبة عمار). ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
-
-    # منطق الحجز النهائي
     if "final_booking:" in msg:
-        # استخراج البيانات من الرسالة المنسقة القادمة من الـ HTML
-        match = re.search(r"name: (.*) phone: (.*) service: (.*)", msg)
-        if match:
-            name, phone, service = match.groups()
+        try:
+            # استخراج البيانات بدقة أكبر
+            name = msg.split("name: ")[1].split(" phone:")[0]
+            phone = msg.split("phone: ")[1].split(" service:")[0]
+            service = msg.split("service: ")[1]
+            
             conn = sqlite3.connect("clients.db")
             conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
             conn.commit()
             conn.close()
-            # تنبيه تليجرام
-            if ADMIN_CHAT_ID:
+
+            if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
                 requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", json={"chat_id": ADMIN_CHAT_ID, "text": f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"})
             
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
-            user_states[user_id] = {"step": "ask_service", "service": None} # ريست للحالة
-            return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً.\nيمكنك تأكيد الحجز فوراً من هنا: {link}"})
+            user_states[user_id] = {"step": "ask_service", "service": None}
+            return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً لتأكيد الموعد.\nيمكنك الحجز مباشرة من هنا أيضاً: {link}"})
+        except:
+            return jsonify({"reply": "عذراً، حدث خطأ أثناء تسجيل البيانات. يرجى المحاولة مرة أخرى."})
 
-    # منطق الفهم السياقي
+    if any(x in msg.lower() for x in ["سلام", "اهلا", "hi", "hello"]):
+        return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
+
     if state["step"] == "ask_service":
         ai_res = ask_ai(msg)
         service = ai_res.get("service")
@@ -113,7 +99,7 @@ def chat():
             state["service"] = service
             state["step"] = "collect_data"
             res = SERVICES[service]
-            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\n💰 التكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك الثلاثي ورقم موبايلك لنرتب لك الموعد؟ 👇"})
+            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\nالتكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك الثلاثي ورقم موبايلك لنرتب لك الموعد؟ 👇", "current_service": service})
         return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم استفسار عن خدمات التجميل؟", "show_services": True})
 
     return jsonify({"reply": "عذراً، هل يمكنك توضيح طلبك؟"})
