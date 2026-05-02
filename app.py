@@ -27,7 +27,7 @@ client = OpenAI(
 )
 
 # =========================
-# 💰 PRICING (مهم جداً)
+# 💰 PRICING
 # =========================
 PRICES = {
     "تبييض": "6000 جنيه",
@@ -60,7 +60,6 @@ def init_db():
 
 init_db()
 
-
 def save_client(name, phone, service, tag):
     conn = sqlite3.connect("clients.db")
     c = conn.cursor()
@@ -83,6 +82,11 @@ def validate_phone(phone):
     return re.match(r"^\+?\d{8,15}$", phone)
 
 # =========================
+# SESSION (flow)
+# =========================
+user_states = {}
+
+# =========================
 # 🧠 AI
 # =========================
 def ask_ai(user_text):
@@ -92,18 +96,32 @@ def ask_ai(user_text):
             {
                 "role": "system",
                 "content": """
-أنت موظف استقبال في عيادة أسنان.
+أنت موظف استقبال محترف في عيادة أسنان.
 
-افهم كلام العميل وحدد:
-- الخدمة
-- نوع الحالة
+مهمتك:
+- فهم كلام العميل
+- تحديد الخدمة المناسبة
+- تحديد نوع الحالة
 
-ارجع JSON فقط:
+⚠️ ممنوع تذكر أي أسعار نهائيًا
+
+الخدمات:
+- تبييض (تجميل)
+- فينير (تجميل)
+- زراعة (زراعة)
+- كشف (ألم أو فحص)
+
+أمثلة:
+- "سناني فيها ألم" → كشف
+- "عايز ابتسامة حلوة" → تبييض أو فينير
+- "سن واقع" → زراعة
+
+ارجع JSON فقط بدون شرح:
 
 {
-"reply": "رد مقنع بدون أسعار",
-"service": "تبييض أو زراعة أو فينير أو كشف",
-"tag": "ألم أو تجميل أو زراعة"
+"service": "اسم الخدمة",
+"tag": "ألم أو تجميل أو زراعة",
+"confidence": "high أو medium أو low"
 }
 """
             },
@@ -117,26 +135,29 @@ def ask_ai(user_text):
         return json.loads(content)
     except:
         return {
-            "reply": "ممكن توضح أكتر المشكلة؟",
             "service": "كشف",
-            "tag": "ألم"
+            "tag": "ألم",
+            "confidence": "low"
         }
-
 # =========================
-# 💡 توليد رد مضبوط بالسعر
+# 💥 SALES SCRIPT
 # =========================
-def build_reply(ai_data):
-    service = ai_data.get("service", "كشف")
-
+def build_sales_reply(service, confidence="high"):
     price = PRICES.get(service, "يحدد بعد الكشف")
 
-    return f"""الخدمة: {service} 💎  
+    if confidence == "low":
+        return """محتاج تفاصيل أكتر عن حالتك 🤔  
+ممكن توضح المشكلة أكتر؟"""
+
+    return f"""تمام 👌
+
+واضح إنك محتاج {service} 🦷  
 السعر يبدأ من {price}
 
-تحب أحجزلك؟ ابعت:
-name:
-phone:
-"""
+🔥 عندنا عرض لفترة محدودة  
+والحجز النهارده بيضمنلك أفضل نتيجة
+
+تحب نحجزلك دلوقتي؟ قولي اسمك 👇"""
 
 # =========================
 # HOME
@@ -146,7 +167,7 @@ def home():
     return send_from_directory(".", "index.html")
 
 # =========================
-# CHAT API
+# CHAT
 # =========================
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -157,138 +178,125 @@ def chat():
         return jsonify({"error": "No message"}), 400
 
     lower = msg.lower()
+    user_id = request.remote_addr
 
-    try:
-        # =====================
-        # 📥 حجز
-        # =====================
-        if "name:" in lower and "phone:" in lower:
+    if user_id not in user_states:
+        user_states[user_id] = {
+            "step": "start",
+            "service": None,
+            "name": None,
+            "last_seen": datetime.now()
+        }
 
-            name = msg.split("name:")[1].split("phone:")[0].strip()
-            phone = msg.split("phone:")[1].split("service:")[0].strip()
+    state = user_states[user_id]
 
-            service = "كشف"
-            tag = "غير معروف"
+    # =====================
+    # 👋 Greeting
+    # =====================
+    greetings = ["السلام", "اهلا", "مرحبا", "hi", "hello"]
 
-            if "service:" in lower:
-                service = msg.split("service:")[1].strip()
+    if state["step"] == "start" and any(g in lower for g in greetings):
+        state["step"] = "ask_service"
 
-            # ✅ Validation
-            if not validate_name(name):
-                return jsonify({"reply": "❌ الاسم لازم يكون 3 حروف على الأقل"})
+        return jsonify({
+            "reply": "أهلاً بيك 👋\nقولّي المشكلة أو اختار خدمة:",
+            "show_buttons": True
+        })
 
-            if not validate_phone(phone):
-                return jsonify({"reply": "❌ رقم الهاتف غير صحيح (اكتب كده: 010xxxxxxxx)"})
+    # =====================
+    # 🧠 تحديد الخدمة
+    # =====================
+    if state["step"] in ["start", "ask_service"]:
 
-            # 🧠 تحليل tag من الخدمة
-            ai = ask_ai(service)
-            tag = ai.get("tag", "غير معروف")
-
-            save_client(name, phone, service, tag)
-
-            send_to_telegram(
-                f"📥 عميل جديد:\n👤 {name}\n📞 {phone}\n🦷 {service}\n🏷 {tag}"
-            )
-
-            return jsonify({
-                "reply": "تم الحجز ✅ هنكلمك قريب"
-            })
-
-        # =====================
-        # 🤖 AI + تحكم
-        # =====================
         ai = ask_ai(msg)
 
-        reply = build_reply(ai)
+        service = ai["service"]
+        confidence = ai.get("confidence", "high")
+
+        state["service"] = service
+        state["step"] = "ask_name"
+
+        reply = build_sales_reply(service, confidence)
+
+        return jsonify({
+            "reply": reply
+        })
+    # =====================
+    # 👤 الاسم
+    # =====================
+    if state["step"] == "ask_name":
+
+        if not validate_name(msg):
+            return jsonify({"reply": "❌ الاسم لازم يكون 3 حروف على الأقل"})
+
+        state["name"] = msg
+        state["step"] = "ask_phone"
+
+        return jsonify({
+            "reply": "تمام 👍 ابعت رقمك عشان نحجزلك فورًا 📞"
+        })
+
+    # =====================
+    # 📞 الهاتف
+    # =====================
+    if state["step"] == "ask_phone":
+
+        if not validate_phone(msg):
+            return jsonify({"reply": "❌ رقم غير صحيح (مثال: 010xxxxxxxx)"})
+
+        name = state["name"]
+        phone = msg
+        service = state["service"]
+
+        ai = ask_ai(service)
+        tag = ai["tag"]
+
+        save_client(name, phone, service, tag)
 
         send_to_telegram(
-            f"💬 {msg}\n🤖 {reply}\n🦷 {ai.get('service')}\n🏷 {ai.get('tag')}"
+            f"🔥 عميل جديد\n👤 {name}\n📞 {phone}\n🦷 {service}\n🏷 {tag}"
         )
 
-        return jsonify({"reply": reply})
+        state["step"] = "done"
 
-    except Exception as e:
-        print("ERROR:", e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "reply": "🔥 تم الحجز! فريقنا هيكلمك خلال دقائق"
+        })
+
+    # =====================
+    # 💤 FOLLOW-UP
+    # =====================
+    if state["step"] == "ask_name":
+        return jsonify({
+            "reply": "لسه مستني اسمك عشان نحجزلك 😉"
+        })
+
+    if state["step"] == "ask_phone":
+        return jsonify({
+            "reply": "ابعت رقمك بسرعة قبل ما العرض يخلص ⏳"
+        })
+
+    return jsonify({"reply": "قولّي محتاج إيه وأنا أساعدك 👌"})
 
 # =========================
-# ADMIN PANEL
+# ADMIN
 # =========================
 @app.route("/admin")
 def admin():
     conn = sqlite3.connect("clients.db")
     c = conn.cursor()
 
-    c.execute("SELECT id, name, phone, service, tag, status, created_at FROM clients ORDER BY id DESC")
+    c.execute("SELECT name, phone, service, tag, status FROM clients ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
 
-    html = """
-    <h2>📋 العملاء</h2>
-    <table border=1 cellpadding=10>
-    <tr>
-    <th>الاسم</th>
-    <th>الرقم</th>
-    <th>الخدمة</th>
-    <th>النوع</th>
-    <th>الحالة</th>
-    <th>تغيير</th>
-    </tr>
-    """
+    html = "<h2>العملاء</h2><table border=1>"
 
     for r in rows:
-        html += f"""
-        <tr>
-        <td>{r[1]}</td>
-        <td>{r[2]}</td>
-        <td>{r[3]}</td>
-        <td>{r[4]}</td>
-        <td>{r[5]}</td>
-        <td>
-            <a href="/update/{r[0]}/تم التواصل">تم التواصل</a> |
-            <a href="/update/{r[0]}/تم الحجز">تم الحجز</a>
-        </td>
-        </tr>
-        """
+        html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>"
 
     html += "</table>"
     return html
-
-# =========================
-# UPDATE STATUS
-# =========================
-@app.route("/update/<int:id>/<status>")
-def update_status(id, status):
-    conn = sqlite3.connect("clients.db")
-    c = conn.cursor()
-
-    c.execute("UPDATE clients SET status=? WHERE id=?", (status, id))
-
-    conn.commit()
-    conn.close()
-
-    return f"تم التحديث إلى {status} ✅ <br><a href='/admin'>رجوع</a>"
-
-# =========================
-# STATS
-# =========================
-@app.route("/stats")
-def stats():
-    conn = sqlite3.connect("clients.db")
-    c = conn.cursor()
-
-    c.execute("SELECT service, COUNT(*) FROM clients GROUP BY service")
-    services = c.fetchall()
-
-    c.execute("SELECT tag, COUNT(*) FROM clients GROUP BY tag")
-    tags = c.fetchall()
-
-    conn.close()
-
-    return jsonify({
-        "services": services,
-        "tags": tags
-    })
 
 # =========================
 # TELEGRAM
@@ -300,8 +308,8 @@ def send_message(chat_id, text):
             json={"chat_id": chat_id, "text": text},
             timeout=10
         )
-    except Exception as e:
-        print("Telegram Error:", e)
+    except:
+        pass
 
 def send_to_telegram(text):
     if ADMIN_CHAT_ID:
