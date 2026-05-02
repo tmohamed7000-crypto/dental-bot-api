@@ -10,7 +10,14 @@ app = Flask(__name__)
 # ----------------------------
 @app.route("/")
 def home():
-    return "Dental Bot API is running 🚀"
+    return "API is running", 200
+
+# ----------------------------
+# Health Check (مهم)
+# ----------------------------
+@app.route("/health")
+def health():
+    return {"status": "ok"}, 200
 
 # ----------------------------
 # Knowledge Base
@@ -30,44 +37,39 @@ def get_reply(msg):
     if "حجز" in msg or "book" in msg:
         return "تمام 👌 ابعت اسمك ورقمك بالشكل ده:\nname: محمد, phone: 010..."
 
-    return "ممكن تقولي نوع الخدمة؟ (تبييض - زراعة - فينير)"
+    return "ممكن تقولي نوع الخدمة؟"
 
 # ----------------------------
-# Save Lead (Safe)
+# Save Leads (safe)
 # ----------------------------
 def save_lead(name, phone):
     try:
-        with open("leads.csv", mode="a", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
+        with open("leads.csv", "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
             writer.writerow([name, phone, datetime.now()])
     except Exception as e:
-        print("Error saving lead:", e)
+        print("Save error:", e)
 
 # ----------------------------
-# API
+# Chat API
 # ----------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json(silent=True) or {}
-    msg = data.get("message", "")
+    try:
+        data = request.get_json(silent=True) or {}
+        msg = data.get("message", "")
 
-    if "name:" in msg and "phone:" in msg:
-        try:
-            name = msg.split("name:")[1].split(",")[0].strip()
-            phone = msg.split("phone:")[1].strip()
+        if "name:" in msg and "phone:" in msg:
+            try:
+                name = msg.split("name:")[1].split(",")[0].strip()
+                phone = msg.split("phone:")[1].strip()
+                save_lead(name, phone)
 
-            save_lead(name, phone)
+                return jsonify({"reply": "تم الحجز ✅"})
+            except:
+                return jsonify({"reply": "اكتب كده:\nname: محمد, phone: 010..."})
 
-            return jsonify({"reply": "تم الحجز ✅ هنتواصل معاك قريب"})
-        except:
-            return jsonify({"reply": "حصل خطأ، ابعت البيانات بالشكل ده:\nname: محمد, phone: 010..."})
+        return jsonify({"reply": get_reply(msg)})
 
-    reply = get_reply(msg)
-    return jsonify({"reply": reply})
-
-# ----------------------------
-# Run
-# ----------------------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
