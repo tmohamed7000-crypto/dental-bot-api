@@ -3,87 +3,131 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Optimum Care Clinic Chat</title>
+<title>Optimum Care Clinic</title>
 <style>
     :root { --primary: #008080; --bg: #f0f2f5; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #e9ecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .chat-container { width: 100%; max-width: 400px; height: 600px; background: white; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    body { font-family: 'Segoe UI', sans-serif; background: #e9ecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .chat-container { width: 100%; max-width: 400px; height: 620px; background: white; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
     .header { background: var(--primary); color: white; padding: 15px; text-align: center; }
     .chat-box { flex: 1; overflow-y: auto; padding: 15px; background: var(--bg); display: flex; flex-direction: column; }
-    .msg { margin: 8px 0; padding: 12px; border-radius: 15px; max-width: 80%; font-size: 0.95rem; line-height: 1.4; }
+    .msg { margin: 8px 0; padding: 12px; border-radius: 15px; max-width: 80%; font-size: 0.95rem; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .bot { background: white; align-self: flex-start; border-bottom-right-radius: 2px; }
     .user { background: var(--primary); color: white; align-self: flex-end; border-bottom-left-radius: 2px; }
     
-    /* Typing Indicator */
+    .btn-group { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+    .btn-group button { background: white; border: 1px solid var(--primary); color: var(--primary); padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; transition: 0.3s; }
+    .btn-group button:hover { background: var(--primary); color: white; }
+
+    .booking-form { background: white; padding: 15px; border-radius: 15px; border: 1px solid #ddd; margin-top: 10px; }
+    .booking-form input, .booking-form select { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+    .submit-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
     .typing { display: flex; gap: 4px; padding: 10px; background: white; border-radius: 15px; width: fit-content; margin: 5px 0; }
     .dot { width: 6px; height: 6px; background: #888; border-radius: 50%; animation: wave 1.3s infinite; }
     .dot:nth-child(2) { animation-delay: -1.1s; }
     .dot:nth-child(3) { animation-delay: -0.9s; }
     @keyframes wave { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
 
-    .input-area { display: flex; padding: 15px; border-top: 1px solid #eee; }
+    .input-area { display: flex; padding: 15px; border-top: 1px solid #eee; background: white; }
     #messageInput { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 25px; outline: none; margin-left: 10px; }
-    .send-btn { background: var(--primary); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; }
 </style>
 </head>
 <body>
 <div class="chat-container">
-    <div class="header">
-        <strong>سارة - استقبال أوبتمم كير</strong>
-        <div style="font-size: 0.7rem; opacity: 0.8;">نشط الآن</div>
-    </div>
+    <div class="header"><strong>سارة - استقبال أوبتمم كير</strong></div>
     <div class="chat-box" id="chatBox"></div>
     <div class="input-area">
         <input id="messageInput" placeholder="اكتب سؤالك هنا..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button class="send-btn" onclick="sendMessage()">➤</button>
+        <button onclick="sendMessage()" style="background:none; border:none; color:var(--primary); font-size:1.5rem; cursor:pointer;">➤</button>
     </div>
 </div>
 
 <script>
     const chatBox = document.getElementById("chatBox");
 
-    function addMessage(text, type="bot") {
+    function addMessage(content, type="bot", isHTML=false) {
         const div = document.createElement("div");
         div.className = `msg ${type}`;
-        div.innerHTML = text.replace(/\n/g, '<br>');
+        if(isHTML) div.innerHTML = content;
+        else div.innerText = content;
         chatBox.appendChild(div);
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    window.onload = () => addMessage("أهلاً بك في عيادة أوبتمم كير 🦷✨\nمعك سارة من خدمة العملاء، كيف يمكنني مساعدتك؟");
+    function showTyping(callback) {
+        const t = document.createElement("div");
+        t.id = "typing";
+        t.innerHTML = `<div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+        chatBox.appendChild(t);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        setTimeout(() => { t.remove(); callback(); }, 1500);
+    }
+
+    function showServices() {
+        const services = ["تبييض", "تقويم", "زراعة", "فينير", "طوارئ", "عروسة"];
+        const div = document.createElement("div");
+        div.className = "btn-group";
+        services.forEach(s => {
+            const b = document.createElement("button");
+            b.innerText = s;
+            b.onclick = () => { addMessage(s, "user"); handleBotResponse(s); };
+            div.appendChild(b);
+        });
+        chatBox.appendChild(div);
+    }
+
+    window.onload = () => {
+        addMessage("أهلاً بك في عيادة أوبتمم كير ✨\nمعك سارة، كيف يمكنني مساعدتك اليوم؟");
+        showServices();
+    };
 
     async function sendMessage() {
         const input = document.getElementById("messageInput");
-        const msg = input.value.trim();
-        if (!msg) return;
-
+        if(!input.value.trim()) return;
+        const msg = input.value;
         addMessage(msg, "user");
         input.value = "";
+        handleBotResponse(msg);
+    }
 
-        // إظهار النقاط المتموجة
-        const typing = document.createElement("div");
-        typing.id = "typing";
-        typing.innerHTML = `<div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
-        chatBox.appendChild(typing);
-        chatBox.scrollTop = chatBox.scrollHeight;
-
-        try {
+    async function handleBotResponse(msg) {
+        showTyping(async () => {
             const res = await fetch("/chat", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({ message: msg })
             });
             const data = await res.json();
-            
-            // تأخير طبيعي (ثانية ونصف)
-            setTimeout(() => {
-                document.getElementById("typing").remove();
-                addMessage(data.reply);
-            }, 1500);
-        } catch {
-            document.getElementById("typing").remove();
-            addMessage("عذراً، حدث خطأ في الاتصال.");
-        }
+            addMessage(data.reply);
+            if(data.show_services) showServices();
+            if(data.reply.includes("اكتب اسمك")) showForm();
+        });
+    }
+
+    function showForm() {
+        const div = document.createElement("div");
+        div.className = "booking-form";
+        div.innerHTML = `
+            <input id="fName" placeholder="الاسم الثلاثي">
+            <select id="fCode">
+                <option value="+20">🇪🇬 مصر (+20)</option>
+                <option value="+966">🇸🇦 السعودية (+966)</option>
+                <option value="+971">🇦🇪 الإمارات (+971)</option>
+            </select>
+            <input id="fPhone" type="tel" placeholder="رقم الموبايل">
+            <button class="submit-btn" onclick="submitForm()">تأكيد الحجز ✅</button>
+        `;
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function submitForm() {
+        const name = document.getElementById("fName").value;
+        const phone = document.getElementById("fPhone").value;
+        const code = document.getElementById("fCode").value;
+        if(name.length < 3 || phone.length < 8) return alert("بيانات ناقصة");
+        
+        handleBotResponse(`name: ${name} phone: ${code}${phone}`);
     }
 </script>
 </body>

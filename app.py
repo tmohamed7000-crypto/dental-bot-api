@@ -18,16 +18,10 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-if ADMIN_CHAT_ID:
-    ADMIN_CHAT_ID = int(ADMIN_CHAT_ID)
-
-client = OpenAI(
-    base_url="https://openrouter.ai",
-    api_key=OPENROUTER_API_KEY
-)
+client = OpenAI(base_url="https://openrouter.ai", api_key=OPENROUTER_API_KEY)
 
 # =========================
-# SERVICES (بيانات عيادة أوبتمم كير)
+# SERVICES
 # =========================
 SERVICES = {
     "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
@@ -41,11 +35,11 @@ SERVICES = {
 }
 
 # =========================
-# DATABASE INIT
+# DATABASE
 # =========================
 def init_db():
     conn = sqlite3.connect("clients.db")
-    conn.execute("CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, service TEXT, tag TEXT, status TEXT, created_at TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, service TEXT, status TEXT, created_at TEXT)")
     conn.commit()
     conn.close()
 
@@ -59,30 +53,21 @@ def save_client(name, phone, service):
     conn.close()
 
 # =========================
-# AI LOGIC (فهم المعنى السياقي)
+# AI LOGIC
 # =========================
 def ask_ai(user_text):
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
             messages=[
-                {"role": "system", "content": """أنت مصنف ذكي لعيادة أسنان. مهمتك فهم نية المستخدم.
-                - إذا اشتكى من (ألم، وجع، سنة مكسورة، ضرس، تعب) -> service: "طوارئ".
-                - إذا سأل عن (تبييض، تفتيح) -> service: "تبييض".
-                - إذا سأل عن (تقويم، سلك) -> service: "تقويم".
-                - أرجع JSON فقط: {"service": "اسم الخدمة"}
-                الخدمات المتاحة فقط: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة)."""},
+                {"role": "system", "content": "صنف نية المستخدم لخدمة واحدة: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). إذا كان هناك ألم اختر طوارئ. أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
                 {"role": "user", "content": user_text}
             ]
         )
-        content = completion.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+        content = completion.choices.message.content.replace("```json", "").replace("```", "").strip()
         return json.loads(content)
     except:
         return {"service": "كشف"}
-
-def build_sales_reply(service):
-    data = SERVICES.get(service, SERVICES["كشف"])
-    return f"بكل سرور! في عيادة أوبتمم كير نوفر خدمة {service}.\n💰 السعر: {data['price']}\n📍 مدينة نصر، أرض الجولف.\nتحب أحجزلك موعد استشارة؟ من فضلك اكتب اسمك الثلاثي 👇"
 
 # =========================
 # ROUTES
@@ -100,39 +85,31 @@ def chat():
     user_id = request.remote_addr
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None, "name": None}
     state = user_states[user_id]
-    lower = msg.lower()
+    
+    # التحقق من التحية
+    if any(x in msg.lower() for x in ["سلام", "اهلا", "hi", "hello"]):
+        return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
 
-    # الترحيب الذكي
-    greetings = ["السلام عليكم", "اهلا", "صباح", "مساء", "سلام", "hi", "hello"]
-    if any(x in lower for x in greetings):
-        reply = "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير (د. هبة عمار). ✨\nأنا سارة، مساعدة الاستقبال. كيف يمكنني مساعدتك اليوم؟"
-        return jsonify({"reply": reply})
-
-    # تحليل الخدمة/الشكوى
+    # معالجة الخدمة
     if state["step"] == "ask_service":
-        ai_res = ask_ai(msg)
-        service = ai_res.get("service")
+        service = msg if msg in SERVICES else ask_ai(msg).get("service")
         if service in SERVICES:
             state["service"] = service
             state["step"] = "ask_name"
-            return jsonify({"reply": build_sales_reply(service)})
-        return jsonify({"reply": "سلامتك! هل تود الاستفسار عن خدمات التجميل (تبييض/تقويم) أم حجز كشف طوارئ للألم؟"})
+            res = SERVICES[service]
+            return jsonify({"reply": f"خدمة {service} ممتازة! السعر: {res['price']}.\nمن فضلك اكتب اسمك الثلاثي لنحجز لك استشارة 👇"})
+        return jsonify({"reply": "سلامتك! هل تريد حجز كشف طوارئ أم استفسار عن تجميل الأسنان؟", "show_services": True})
 
-    # الاسم
-    if state["step"] == "ask_name":
-        if len(msg.strip()) < 3: return jsonify({"reply": "من فضلك اكتب الاسم الثلاثي بشكل صحيح."})
-        state["name"] = msg
-        state["step"] = "ask_phone"
-        return jsonify({"reply": f"تشرفنا يا {msg}! ممكن رقم موبايلك للتواصل؟ 📞"})
-
-    # الهاتف
-    if state["step"] == "ask_phone":
-        if not re.match(r"^\+?\d{10,15}$", msg): return jsonify({"reply": "رقم الهاتف غير صحيح، يرجى كتابته بشكل صحيح."})
-        save_client(state["name"], msg, state["service"])
+    # معالجة الحجز النهائي (الاسم والهاتف يتم استلامهم من الفورم في الـ HTML)
+    if "phone:" in msg and "name:" in msg:
+        parts = msg.split(" ")
+        name = parts[1]
+        phone = parts[3]
+        save_client(name, phone, state["service"])
+        # إرسال تليجرام هنا (اختياري)
         link = SERVICES[state["service"]]["link"]
-        reply = f"تم تسجيل طلبك بنجاح يا {state['name']}! ✅\nيمكنك تأكيد الحجز فوراً من هنا: {link}\nوسنتصل بك قريباً."
         user_states[user_id] = {"step": "ask_service", "service": None, "name": None}
-        return jsonify({"reply": reply})
+        return jsonify({"reply": f"تم الحجز بنجاح يا {name}! ✅\nيمكنك تأكيد الموعد الآن: {link}"})
 
     return jsonify({"reply": "عذراً، هل يمكنك توضيح طلبك؟"})
 
