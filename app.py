@@ -43,33 +43,33 @@ init_db()
 # الذكاء الاصطناعي
 # =========================
 def ask_ai(user_text):
-    # 1. قاعدة الألم الصارمة (للحالات الطارئة فقط)
-    pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور"]
+    # قواعد يدوية سريعة لضمان الدقة المطلقة
+    mapping = {
+        "زراعة": "زراعة",
+        "تبييض": "تبييض",
+        "تقويم": "تقويم",
+        "فينير": "فينير",
+        "عروسة": "عروسة",
+        "ابتسامة": "ابتسامة"
+    }
+    for key in mapping:
+        if key in user_text: return {"service": mapping[key]}
     
-    # 2. قاعدة التجميل الصارمة (لمنع الخلط مع الكشف)
-    cosmetic_keywords = ["تبييض", "تفتيح", "فينير", "تقويم", "ابتسامة", "عروسة"]
-
-    # فحص يدوي سريع قبل الـ AI لضمان الدقة 100%
-    if any(x in user_text for x in cosmetic_keywords):
-        for key in cosmetic_keywords:
-            if key in user_text: return {"service": key}
-            
-    if any(x in user_text for x in pain_keywords):
+    # فحص الألم
+    if any(x in user_text for x in ["وجع", "الم", "ألم", "تعب", "مكسور"]):
         return {"service": "طوارئ"}
-    
+        
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "أنت مصنف خدمات عيادة أسنان. الخدمات: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
-                {"role": "user", "content": user_text}
-            ]
+            messages=[{"role": "system", "content": "صنف لخدمة واحدة فقط من: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
+                      {"role": "user", "content": user_text}]
         )
-        content = completion.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+        content = completion.choices.message.content.replace("```json", "").replace("```", "").strip()
         return json.loads(content)
     except:
         return {"service": "كشف"}
-
+    
 # =========================
 # منطق المحادثة والحجز
 # =========================
@@ -119,52 +119,70 @@ def chat():
     msg = data.get("message", "")
     user_id = request.remote_addr
 
-    # --- استلام الحجز من الفورم ---
+    # --- 1. استلام الحجز من الفورم (تعديل بسيط لضمان الاستقرار) ---
     if isinstance(msg, dict) and msg.get("type") == "final_booking":
         try:
             name = msg.get("name")
             phone = msg.get("phone")
             service = msg.get("service")
             
-            # حفظ في قاعدة البيانات
             conn = sqlite3.connect("clients.db")
             conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", 
                          (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
             conn.commit()
             conn.close()
 
-            # ✅ تصحيح رابط تليجرام لضمان وصول الرسالة
             if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
                 txt = f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"
-                # الرابط الصحيح يبدأ بـ api.telegram.org/bot
                 requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
                               json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=5)
             
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
-            
-            # ✅ جعل الرابط قابل للضغط باستخدام HTML
-            reply_html = f"تم تسجيل طلبك بنجاح يا {name}! ✅<br><br>وسيقوم فريق الاستقبال بالتواصل معك قريباً.<br>يمكنك تأكيد الحجز واختيار الساعة المناسبة من هنا:<br><a href='{link}' target='_blank' style='color: #008080; font-weight: bold;'>اضغط هنا لفتح جدول المواعيد</a>"
-            
+            reply_html = f"تم تسجيل طلبك بنجاح يا {name}! ✅<br><br>وسيقوم فريق الاستقبال بالتواصل معك قريباً.<br>يمكنك تأكيد الحجز من هنا:<br><a href='{link}' target='_blank' style='color: #008080; font-weight: bold;'>اضغط هنا لفتح جدول المواعيد</a>"
             return jsonify({"reply": reply_html})
         except:
             return jsonify({"reply": "عذراً، حدث خطأ في النظام."})
         
-    # --- منطق الشات العادي ---
+    # --- 2. منطق الشات العادي ---
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
     
-    if any(x in str(msg).lower() for x in ["سلام", "اهلا", "hi", "بكام"]):
-        return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
+    # تحويل الرسالة لنص لتجنب أخطاء النوع
+    msg_text = str(msg)
+    
+    if any(x in msg_text.lower() for x in ["سلام", "اهلا", "hi", "hello"]):
+        return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير (د. هبة عمار). ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
 
     if state["step"] == "ask_service":
-        ai_res = ask_ai(str(msg))
+        ai_res = ask_ai(msg_text)
         service = ai_res.get("service")
+        
         if service in SERVICES:
             state["service"] = service
             state["step"] = "collect_data"
-            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\nالتكلفة التقريبية: {SERVICES[service]['price']}.\n\nممكن تشرفني باسمك الثلاثي ورقم موبايلك؟ 👇", "current_service": service})
+            res = SERVICES[service]
+            # تخصيص الرد بناءً على نوع الخدمة (ألم أم تجميل)
+            intro = "سلامتك! ألف سلامة عليك. 🌹" if service == "طوارئ" else "اختيار ممتاز! ✨"
+            return jsonify({
+                "reply": f"{intro}\nبناءً على طلبك، حضرتك محتاج خدمة {service}.\nالتكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك ورقم موبايلك لنرتب لك الموعد؟ 👇", 
+                "current_service": service
+            })
     
-    return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم تجميل؟", "show_services": True})
+    # إذا لم يفهم البوت، يعرض الخدمات بدلاً من الرد الجاف
+    return jsonify({"reply": "أهلاً بك! يمكنك اختيار خدمة من الأزرار بالأسفل أو إخباري بمشكلتك وسأساعدك فوراً.", "show_services": True})
+
+# --- 3. إضافة لوحة التحكم (Admin Panel) المفقودة ---
+@app.route("/admin")
+def admin():
+    try:
+        conn = sqlite3.connect("clients.db")
+        rows = conn.execute("SELECT name, phone, service, created_at FROM clients ORDER BY id DESC").fetchall()
+        conn.close()
+        html = "<html dir='rtl'><head><style>body{font-family:sans-serif;background:#f4f7f6;padding:20px;}table{width:100%;background:white;border-collapse:collapse;}th,td{padding:12px;border:1px solid #ddd;text-align:center;}th{background:#008080;color:white;}</style></head><body>"
+        html += "<h2>📋 قائمة حجوزات عيادة أوبتمم كير</h2><table><tr><th>الاسم</th><th>الهاتف</th><th>الخدمة</th><th>التاريخ</th></tr>"
+        for r in rows: html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td></tr>"
+        return html + "</table></body></html>"
+    except: return "لا توجد بيانات حالياً."
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
