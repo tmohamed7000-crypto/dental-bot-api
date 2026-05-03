@@ -43,17 +43,32 @@ init_db()
 # الذكاء الاصطناعي
 # =========================
 def ask_ai(user_text):
-    pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور", "حساسية"]
+    # 1. قاعدة الألم الصارمة (للحالات الطارئة فقط)
+    pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور"]
+    
+    # 2. قاعدة التجميل الصارمة (لمنع الخلط مع الكشف)
+    cosmetic_keywords = ["تبييض", "تفتيح", "فينير", "تقويم", "ابتسامة", "عروسة"]
+
+    # فحص يدوي سريع قبل الـ AI لضمان الدقة 100%
+    if any(x in user_text for x in cosmetic_keywords):
+        for key in cosmetic_keywords:
+            if key in user_text: return {"service": key}
+            
     if any(x in user_text for x in pain_keywords):
         return {"service": "طوارئ"}
+    
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
-            messages=[{"role": "system", "content": "صنف لخدمة واحدة فقط: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
-                      {"role": "user", "content": user_text}]
+            messages=[
+                {"role": "system", "content": "أنت مصنف خدمات عيادة أسنان. الخدمات: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
+                {"role": "user", "content": user_text}
+            ]
         )
-        return json.loads(completion.choices[0].message.content.replace("```json", "").replace("```", "").strip())
-    except: return {"service": "كشف"}
+        content = completion.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+        return json.loads(content)
+    except:
+        return {"service": "كشف"}
 
 # =========================
 # منطق المحادثة والحجز
