@@ -48,37 +48,33 @@ def init_db():
 init_db()
 
 def ask_ai(user_text):
-    # كلمات الترحيب التي يجب أن يتجاهلها ولا يحولها لحجز
-    greetings = ["مساء", "صباح", "شكرا", "اهلا", "أهلا", "نورت", "سلام"]
+    # 1. فلترة التحيات الصريحة أولاً لسرعة الرد
+    greetings = ["مساء", "صباح", "اهلا", "أهلا", "نورت", "سلام", "ازيك"]
     if any(word in user_text for word in greetings):
         return {"service": None}
 
-    # قواعد يدوية سريعة
-    mapping = {
-        "زراعة": "زراعة", "تبييض": "تبييض", "تقويم": "تقويم",
-        "فينير": "فينير", "عروسة": "عروسة", "ابتسامة": "ابتسامة", "كشف": "كشف"
-    }
-    for key in mapping:
-        if key in user_text: return {"service": mapping[key]}
-    
-    # فحص الألم
-    if any(x in user_text for x in ["وجع", "الم", "ألم", "تعب", "مكسور", "سنتي"]):
-        return {"service": "طوارئ"}
-        
+    # 2. ترك الذكاء الاصطناعي يقرر (لأنه الأذكى في فهم الأخطاء الإملائية مثل 'تبيض')
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
-            messages=[{"role": "system", "content": "صنف لخدمة واحدة فقط من: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). إذا كان الكلام مجرد تحية أو غير مفهوم أرجع {'service': null}"},
-                      {"role": "user", "content": user_text}]
+            messages=[
+                {"role": "system", "content": f"أنت خبير تصنيف. حدد الخدمة المطلوبة من القائمة: ({', '.join(SERVICES.keys())}). افهم القصد حتى لو وجدت أخطاء إملائية. إذا كان الكلام بعيداً عن الخدمات أو مجرد تحية أرجع {{'service': null}}. أرجع JSON فقط."},
+                {"role": "user", "content": user_text}
+            ],
+            response_format={ "type": "json_object" } # تضمن لك استلام JSON سليم دائماً
         )
-        content = completion.choices.message.content.replace("```json", "").replace("```", "").strip()
-        res = json.loads(content)
-        # التأكد أن الخدمة المستخرجة موجودة فعلاً في القائمة لدينا
+        res = json.loads(completion.choices.message.content)
+        
+        # التأكد أن الخدمة التي اختارها الـ AI موجودة في قائمتنا فعلاً
         if res.get("service") in SERVICES:
             return res
         return {"service": None}
     except:
-        return {"service": None} # تم التغيير من "كشف" إلى None لضمان عدم التكرار
+        # 3. في حالة فشل الـ AI (مثلاً مشكلة انترنت)، نلجأ للقواعد اليدوية كمحرك احتياطي
+        mapping = {"زراعة": "زراعة", "تبييض": "تبييض", "تبيض": "تبييض", "تقويم": "تقويم", "كشف": "كشف"}
+        for key in mapping:
+            if key in user_text: return {"service": mapping[key]}
+        return {"service": None}
     
 # =========================
 # منطق المحادثة والحجز
