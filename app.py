@@ -32,43 +32,53 @@ SERVICES = {
 # =========================
 def init_db():
     conn = sqlite3.connect("clients.db")
-    conn.execute("DROP TABLE IF EXISTS clients") # إعادة إنشاء الجدول لتجنب تعارض الأعمدة
-    conn.execute("CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT, phone TEXT, service TEXT, created_at TEXT)")
+    # نستخدم CREATE TABLE IF NOT EXISTS بدون DROP TABLE
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            name TEXT, 
+            phone TEXT, 
+            service TEXT, 
+            created_at TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
 init_db()
 
-# =========================
-# الذكاء الاصطناعي
-# =========================
 def ask_ai(user_text):
-    # قواعد يدوية سريعة لضمان الدقة المطلقة
+    # كلمات الترحيب التي يجب أن يتجاهلها ولا يحولها لحجز
+    greetings = ["مساء", "صباح", "شكرا", "اهلا", "أهلا", "نورت", "سلام"]
+    if any(word in user_text for word in greetings):
+        return {"service": None}
+
+    # قواعد يدوية سريعة
     mapping = {
-        "زراعة": "زراعة",
-        "تبييض": "تبييض",
-        "تقويم": "تقويم",
-        "فينير": "فينير",
-        "عروسة": "عروسة",
-        "ابتسامة": "ابتسامة"
+        "زراعة": "زراعة", "تبييض": "تبييض", "تقويم": "تقويم",
+        "فينير": "فينير", "عروسة": "عروسة", "ابتسامة": "ابتسامة", "كشف": "كشف"
     }
     for key in mapping:
         if key in user_text: return {"service": mapping[key]}
     
     # فحص الألم
-    if any(x in user_text for x in ["وجع", "الم", "ألم", "تعب", "مكسور"]):
+    if any(x in user_text for x in ["وجع", "الم", "ألم", "تعب", "مكسور", "سنتي"]):
         return {"service": "طوارئ"}
         
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
-            messages=[{"role": "system", "content": "صنف لخدمة واحدة فقط من: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
+            messages=[{"role": "system", "content": "صنف لخدمة واحدة فقط من: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). إذا كان الكلام مجرد تحية أو غير مفهوم أرجع {'service': null}"},
                       {"role": "user", "content": user_text}]
         )
         content = completion.choices.message.content.replace("```json", "").replace("```", "").strip()
-        return json.loads(content)
+        res = json.loads(content)
+        # التأكد أن الخدمة المستخرجة موجودة فعلاً في القائمة لدينا
+        if res.get("service") in SERVICES:
+            return res
+        return {"service": None}
     except:
-        return {"service": "كشف"}
+        return {"service": None} # تم التغيير من "كشف" إلى None لضمان عدم التكرار
     
 # =========================
 # منطق المحادثة والحجز
@@ -119,13 +129,9 @@ def chat():
     msg = data.get("message", "")
     user_id = request.remote_addr
 
-    # --- 1. استلام الحجز من الفورم (تعديل بسيط لضمان الاستقرار) ---
     if isinstance(msg, dict) and msg.get("type") == "final_booking":
         try:
-            name = msg.get("name")
-            phone = msg.get("phone")
-            service = msg.get("service")
-            
+            name, phone, service = msg.get("name"), msg.get("phone"), msg.get("service")
             conn = sqlite3.connect("clients.db")
             conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", 
                          (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
@@ -134,41 +140,37 @@ def chat():
 
             if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
                 txt = f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"
-                requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
+                requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
                               json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=5)
             
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
-            reply_html = f"تم تسجيل طلبك بنجاح يا {name}! ✅<br><br>وسيقوم فريق الاستقبال بالتواصل معك قريباً.<br>يمكنك تأكيد الحجز من هنا:<br><a href='{link}' target='_blank' style='color: #008080; font-weight: bold;'>اضغط هنا لفتح جدول المواعيد</a>"
+            reply_html = f"تم تسجيل طلبك بنجاح يا {name}! ✅<br><br>وسيقوم فريق الاستقبال بالتواصل معك قريباً.<br><a href='{link}' target='_blank' style='color: #008080; font-weight: bold;'>اضغط هنا لفتح جدول المواعيد</a>"
             return jsonify({"reply": reply_html})
         except:
-            return jsonify({"reply": "عذراً، حدث خطأ في النظام."})
+            return jsonify({"reply": "عذراً، حدث خطأ في الحفظ."})
         
-    # --- 2. منطق الشات العادي ---
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
-    
-    # تحويل الرسالة لنص لتجنب أخطاء النوع
     msg_text = str(msg)
     
-    if any(x in msg_text.lower() for x in ["سلام", "اهلا", "hi", "hello"]):
-        return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير (د. هبة عمار). ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
+    # تحسين الرد على التحية
+    if any(x in msg_text.lower() for x in ["سلام", "اهلا", "hi", "hello", "مساء", "صباح"]):
+        return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير. ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
 
     if state["step"] == "ask_service":
         ai_res = ask_ai(msg_text)
         service = ai_res.get("service")
         
-        if service in SERVICES:
-            state["service"] = service
-            state["step"] = "collect_data"
+        # لا ينتقل لجمع البيانات إلا لو وجد خدمة حقيقية
+        if service and service in SERVICES:
+            state["service"], state["step"] = service, "collect_data"
             res = SERVICES[service]
-            # تخصيص الرد بناءً على نوع الخدمة (ألم أم تجميل)
             intro = "سلامتك! ألف سلامة عليك. 🌹" if service == "طوارئ" else "اختيار ممتاز! ✨"
             return jsonify({
-                "reply": f"{intro}\nبناءً على طلبك، حضرتك محتاج خدمة {service}.\nالتكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك ورقم موبايلك لنرتب لك الموعد؟ 👇", 
+                "reply": f"{intro}\nبناءً على طلبك، محتاج خدمة {service}.\nالتكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك ورقم موبايلك لنرتب لك الموعد؟ 👇", 
                 "current_service": service
             })
     
-    # إذا لم يفهم البوت، يعرض الخدمات بدلاً من الرد الجاف
     return jsonify({"reply": "أهلاً بك! يمكنك اختيار خدمة من الأزرار بالأسفل أو إخباري بمشكلتك وسأساعدك فوراً.", "show_services": True})
 
 
