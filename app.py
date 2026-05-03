@@ -17,14 +17,14 @@ ADMIN_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 client = OpenAI(base_url="https://openrouter.ai", api_key=OPENROUTER_API_KEY)
 
 SERVICES = {
-    "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
-    "فينير": {"price": "12000 جنيه", "link": "https://setmore.com"},
-    "زراعة": {"price": "8000 جنيه", "link": "https://setmore.com"},
-    "كشف": {"price": "350 جنيه", "link": "https://setmore.com"},
-    "تقويم": {"price": "400 جنيه", "link": "https://setmore.com"},
-    "طوارئ": {"price": "1200 جنيه", "link": "https://setmore.com"},
-    "ابتسامة": {"price": "2000 جنيه", "link": "https://setmore.com"},
-    "عروسة": {"price": "4000 جنيه", "link": "https://setmore.com"}
+    "تبييض": {"price": "6000 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "فينير": {"price": "12000 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "زراعة": {"price": "8000 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "كشف": {"price": "350 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "تقويم": {"price": "400 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "طوارئ": {"price": "1200 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "ابتسامة": {"price": "2000 جنيه", "link": "https://abdobfpn.setmore.com/"},
+    "عروسة": {"price": "4000 جنيه", "link": "https://abdobfpn.setmore.com/"}
 }
 
 # =========================
@@ -70,33 +70,35 @@ def chat():
     user_id = request.remote_addr
 
     # --- استلام الحجز من الفورم ---
-    if isinstance(msg, dict):
-        name = msg.get("name", "غير معروف")
-        phone = msg.get("phone", "بدون رقم")
-        service = msg.get("service", "كشف")
-        
+    if isinstance(msg, dict) and msg.get("type") == "final_booking":
         try:
-            # 1. حفظ في قاعدة البيانات
+            name = msg.get("name")
+            phone = msg.get("phone")
+            service = msg.get("service")
+            
+            # حفظ في قاعدة البيانات
             conn = sqlite3.connect("clients.db")
             conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", 
                          (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
             conn.commit()
             conn.close()
 
-            # 2. إرسال تليجرام (في بلوك محمي لعدم تعطيل الحجز)
-            try:
-                if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
-                    txt = f"🔥 حجز جديد\n👤 الاسم: {name}\n📞 الهاتف: {phone}\n🦷 الخدمة: {service}"
-                    requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
-                                  json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=3)
-            except: pass 
-
+            # ✅ تصحيح رابط تليجرام لضمان وصول الرسالة
+            if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
+                txt = f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"
+                # الرابط الصحيح يبدأ بـ api.telegram.org/bot
+                requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
+                              json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=5)
+            
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
-            return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً.\nيمكنك تأكيد الحجز فوراً من هنا: {link}"})
+            
+            # ✅ جعل الرابط قابل للضغط باستخدام HTML
+            reply_html = f"تم تسجيل طلبك بنجاح يا {name}! ✅<br><br>وسيقوم فريق الاستقبال بالتواصل معك قريباً.<br>يمكنك تأكيد الحجز واختيار الساعة المناسبة من هنا:<br><a href='{link}' target='_blank' style='color: #008080; font-weight: bold;'>اضغط هنا لفتح جدول المواعيد</a>"
+            
+            return jsonify({"reply": reply_html})
+        except:
+            return jsonify({"reply": "عذراً، حدث خطأ في النظام."})
         
-        except Exception as e:
-            return jsonify({"reply": f"عذراً، حدث خطأ تقني: {str(e)}"})
-
     # --- منطق الشات العادي ---
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
