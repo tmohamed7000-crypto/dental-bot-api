@@ -140,7 +140,7 @@ def chat():
 
             if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
                 txt = f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"
-                requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
+                requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", 
                               json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=5)
             
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
