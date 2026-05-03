@@ -63,6 +63,41 @@ user_states = {}
 @app.route("/")
 def home(): return send_from_directory(".", "index.html")
 
+# =========================
+# لوحة التحكم (Admin Panel)
+# =========================
+@app.route("/admin")
+def admin():
+    try:
+        conn = sqlite3.connect("clients.db")
+        # ترتيب العملاء من الأحدث للأقدم
+        rows = conn.execute("SELECT name, phone, service, created_at FROM clients ORDER BY id DESC").fetchall()
+        conn.close()
+
+        # تصميم الجدول بشكل احترافي وبسيط
+        html = """
+        <html dir='rtl'>
+        <head><title>لوحة الحجوزات</title>
+        <style>
+            body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
+            table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+            th, td { padding: 12px; border: 1px solid #ddd; text-align: center; }
+            th { background-color: #008080; color: white; }
+            tr:nth-child(even) { background-color: #f2f2f2; }
+        </style>
+        </head>
+        <body>
+            <h2 style='text-align:center; color:#008080;'>📋 حجوزات عيادة أوبتمم كير</h2>
+            <table>
+                <tr><th>الاسم</th><th>الهاتف</th><th>الخدمة</th><th>تاريخ الحجز</th></tr>
+        """
+        for r in rows:
+            html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td></tr>"
+        
+        return html + "</table></body></html>"
+    except Exception as e:
+        return f"خطأ في الوصول لقاعدة البيانات: {str(e)}"
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
