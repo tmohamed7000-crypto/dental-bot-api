@@ -171,18 +171,6 @@ def chat():
     # إذا لم يفهم البوت، يعرض الخدمات بدلاً من الرد الجاف
     return jsonify({"reply": "أهلاً بك! يمكنك اختيار خدمة من الأزرار بالأسفل أو إخباري بمشكلتك وسأساعدك فوراً.", "show_services": True})
 
-# --- 3. إضافة لوحة التحكم (Admin Panel) المفقودة ---
-@app.route("/admin")
-def admin():
-    try:
-        conn = sqlite3.connect("clients.db")
-        rows = conn.execute("SELECT name, phone, service, created_at FROM clients ORDER BY id DESC").fetchall()
-        conn.close()
-        html = "<html dir='rtl'><head><style>body{font-family:sans-serif;background:#f4f7f6;padding:20px;}table{width:100%;background:white;border-collapse:collapse;}th,td{padding:12px;border:1px solid #ddd;text-align:center;}th{background:#008080;color:white;}</style></head><body>"
-        html += "<h2>📋 قائمة حجوزات عيادة أوبتمم كير</h2><table><tr><th>الاسم</th><th>الهاتف</th><th>الخدمة</th><th>التاريخ</th></tr>"
-        for r in rows: html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td></tr>"
-        return html + "</table></body></html>"
-    except: return "لا توجد بيانات حالياً."
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
