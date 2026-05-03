@@ -11,16 +11,20 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
+# =========================
+# ENV
+# =========================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# تصحيح رابط OpenRouter
 client = OpenAI(base_url="https://openrouter.ai", api_key=OPENROUTER_API_KEY)
 
+# إعادة الروابط الحقيقية لعيادة أوبتمم كير
 SERVICES = {
     "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
     "فينير": {"price": "12000 جنيه", "link": "https://setmore.com"},
-
     "زراعة": {"price": "8000 جنيه", "link": "https://setmore.com"},
     "كشف": {"price": "350 جنيه", "link": "https://setmore.com"},
     "تقويم": {"price": "400 جنيه", "link": "https://setmore.com"},
@@ -38,7 +42,6 @@ def init_db():
 init_db()
 
 def ask_ai(user_text):
-    # قاعدة برمجية صارمة قبل الـ AI: أي ألم = طوارئ
     pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور"]
     if any(x in user_text for x in pain_keywords):
         return {"service": "طوارئ"}
@@ -47,11 +50,13 @@ def ask_ai(user_text):
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "صنف الطلب لخدمة واحدة فقط: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON: {'service': 'اسم الخدمة'}"},
+                {"role": "system", "content": "صنف الطلب لخدمة واحدة: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
                 {"role": "user", "content": user_text}
             ]
         )
-        return json.loads(completion.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+        # تصحيح طريقة الوصول للمحتوى
+        content = completion.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+        return json.loads(content)
     except:
         return {"service": "كشف"}
 
@@ -66,7 +71,6 @@ def chat():
     msg = data.get("message", "")
     user_id = request.remote_addr
     
-    # التحقق إذا كانت البيانات قادمة من "فورم الحجز" كـ JSON
     if isinstance(msg, dict) and msg.get("type") == "final_booking":
         try:
             name = msg.get("name")
@@ -79,6 +83,7 @@ def chat():
             conn.commit()
             conn.close()
 
+            # تصحيح رابط تليجرام
             if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
                 requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
                               json={"chat_id": ADMIN_CHAT_ID, "text": f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"})
@@ -88,15 +93,14 @@ def chat():
         except:
             return jsonify({"reply": "عذراً، حدث خطأ في النظام. حاول مرة أخرى."})
 
-    # باقي منطق المحادثة العادي (الذكاء الاصطناعي والتحية)
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
     
-    if any(x in msg.lower() for x in ["سلام", "اهلا", "hi"]):
+    if any(x in str(msg).lower() for x in ["سلام", "اهلا", "hi"]):
         return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
 
     if state["step"] == "ask_service":
-        ai_res = ask_ai(msg)
+        ai_res = ask_ai(str(msg))
         service = ai_res.get("service")
         if service in SERVICES:
             state["service"] = service
@@ -107,4 +111,6 @@ def chat():
     return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم تجميل؟", "show_services": True})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    # تعديل المنفذ ليتوافق مع Railway تلقائياً
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
