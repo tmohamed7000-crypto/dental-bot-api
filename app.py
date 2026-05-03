@@ -74,6 +74,7 @@ def ask_ai(user_text):
         mapping = {"زراعة": "زراعة", "تبييض": "تبييض", "تبيض": "تبييض", "تقويم": "تقويم", "كشف": "كشف"}
         for key in mapping:
             if key in user_text: return {"service": mapping[key]}
+        print(f"OpenAI API Error: {str(e)}")
         return {"service": None}
     
 # =========================
