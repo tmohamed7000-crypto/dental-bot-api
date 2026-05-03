@@ -17,11 +17,11 @@
         .dot { width: 6px; height: 6px; background: #adb5bd; border-radius: 50%; animation: wave 1.3s infinite; }
         @keyframes wave { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
         .btn-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-        .btn-group button { background: white; border: 1px solid var(--primary); color: var(--primary); padding: 8px 14px; border-radius: 20px; cursor: pointer; transition: 0.3s; }
+        .btn-group button { background: white; border: 1px solid var(--primary); color: var(--primary); padding: 8px 14px; border-radius: 20px; cursor: pointer; transition: 0.3s; font-size: 0.85rem; }
         .btn-group button:hover { background: var(--primary); color: white; }
-        .form-box { background: white; padding: 15px; border-radius: 15px; border: 1px solid #dee2e6; margin-top: 10px; }
-        .form-box input, .form-box select { width: 100%; padding: 11px; margin: 6px 0; border: 1px solid #ced4da; border-radius: 8px; box-sizing: border-box; }
-        .submit-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .form-box { background: white; padding: 15px; border-radius: 15px; border: 1px solid #dee2e6; margin-top: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .form-box input, .form-box select { width: 100%; padding: 11px; margin: 6px 0; border: 1px solid #ced4da; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; }
+        .submit-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px; }
         .input-area { display: flex; padding: 15px; background: white; border-top: 1px solid #eee; }
         #messageInput { flex: 1; padding: 12px 18px; border: 1px solid #ced4da; border-radius: 25px; outline: none; margin-left: 10px; }
     </style>
@@ -40,10 +40,10 @@
     const chatBox = document.getElementById("chatBox");
     let activeService = "";
 
-    function addMessage(text, type="bot", isHTML=false) {
+    function addMessage(text, type="bot") {
         const div = document.createElement("div");
         div.className = `msg ${type}`;
-        if(isHTML) div.innerHTML = text; else div.innerText = text;
+        div.innerHTML = text.replace(/\n/g, '<br>');
         chatBox.appendChild(div);
         chatBox.scrollTop = chatBox.scrollHeight;
     }
@@ -52,11 +52,11 @@
         const t = document.createElement("div"); t.id = "typing";
         t.innerHTML = `<div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
         chatBox.appendChild(t); chatBox.scrollTop = chatBox.scrollHeight;
-        setTimeout(() => { t.remove(); callback(); }, 1500);
+        setTimeout(() => { if(document.getElementById("typing")) document.getElementById("typing").remove(); callback(); }, 1500);
     }
 
     function showServices() {
-        const services = ["تبييض الأسنان", "زراعة أسنان", "تقويم شفاف", "عرض العروسة", "حالة طوارئ"];
+        const services = ["تبييض", "تقويم", "زراعة", "فينير", "طوارئ", "عروسة"];
         const div = document.createElement("div"); div.className = "btn-group";
         services.forEach(s => {
             const b = document.createElement("button"); b.innerText = s;
@@ -64,6 +64,7 @@
             div.appendChild(b);
         });
         chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     window.onload = () => {
@@ -74,45 +75,64 @@
     async function sendMessage() {
         const input = document.getElementById("messageInput");
         const msg = input.value.trim();
-        if(!msg) return; addMessage(msg, "user"); input.value = "";
+        if(!msg) return; 
+        addMessage(msg, "user"); 
+        input.value = "";
         handleBotResponse(msg);
     }
 
     async function handleBotResponse(msg) {
         showTyping(async () => {
-            const res = await fetch("/chat", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ message: msg })
-            });
-            const data = await res.json();
-            addMessage(data.reply);
-            if(data.current_service) activeService = data.current_service;
-            if(data.show_services) showServices();
-            if(data.reply.includes("اسمك الثلاثي")) showForm();
+            try {
+                const res = await fetch("/chat", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ message: msg })
+                });
+                const data = await res.json();
+                
+                addMessage(data.reply);
+                
+                if(data.current_service) {
+                    activeService = data.current_service;
+                    setTimeout(showForm, 500);
+                }
+                
+                if(data.show_services) showServices();
+            } catch (e) {
+                addMessage("عذراً، حدث خطأ في الاتصال بالسيرفر.");
+            }
         });
     }
 
     function showForm() {
-        const div = document.createElement("div"); div.className = "form-box";
+        if(document.getElementById("activeForm")) return; // منع تكرار الفورم
+        const div = document.createElement("div"); 
+        div.className = "form-box";
+        div.id = "activeForm";
         div.innerHTML = `
             <input id="fName" placeholder="الاسم الثلاثي">
-            <select id="fCode"><option value="+20">🇪🇬 مصر</option><option value="+966">🇸🇦 السعودية</option></select>
+            <select id="fCode">
+                <option value="+20">🇪🇬 مصر (+20)</option>
+                <option value="+966">🇸🇦 السعودية (+966)</option>
+                <option value="+971">🇦🇪 الإمارات (+971)</option>
+            </select>
             <input id="fPhone" type="tel" placeholder="رقم الموبايل">
             <button class="submit-btn" onclick="processForm()">تأكيد البيانات وإرسال الطلب ✅</button>
         `;
         chatBox.appendChild(div); chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-async function processForm() {
-    const name = document.getElementById("fName").value;
-    const phone = document.getElementById("fPhone").value;
-    const code = document.getElementById("fCode").value;
-    
-    if(name.length < 3 || phone.length < 8) return alert("يرجى إكمال البيانات");
+    async function processForm() {
+        const name = document.getElementById("fName").value;
+        const phone = document.getElementById("fPhone").value;
+        const code = document.getElementById("fCode").value;
+        
+        if(name.length < 3 || phone.length < 8) return alert("يرجى إكمال البيانات بشكل صحيح");
 
-    // إرسال البيانات كأوبجكت JSON وليس كنص مجرد لمنع أخطاء الـ Parsing
-    showTyping(async () => {
+        const formNode = document.getElementById("activeForm");
+        formNode.innerHTML = "<p style='text-align:center;'>⏳ جاري إرسال طلبك...</p>";
+
         const res = await fetch("/chat", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -126,10 +146,9 @@ async function processForm() {
             })
         });
         const data = await res.json();
+        formNode.remove();
         addMessage(data.reply);
-    });
-}
-
+    }
 </script>
 </body>
 </html>
