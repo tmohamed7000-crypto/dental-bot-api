@@ -49,32 +49,45 @@ init_db()
 
 def ask_ai(user_text):
     # 1. فلترة التحيات الصريحة أولاً لسرعة الرد
-    greetings = ["مساء", "صباح", "اهلا", "أهلا", "نورت", "سلام", "ازيك"]
-    if any(word in user_text for word in greetings):
+    greetings = ["مساء", "صباح", "اهلا", "أهلا", "نورت", "سلام", "ازيك", "مرحبا"]
+    if any(word in user_text for word in greetings) and len(user_text) < 10:
         return {"service": None}
 
-    # 2. ترك الذكاء الاصطناعي يقرر (لأنه الأذكى في فهم الأخطاء الإملائية مثل 'تبيض')
+    # 2. محاولة استخدام الذكاء الاصطناعي لفهم الجمل المعقدة
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"أنت خبير تصنيف. حدد الخدمة المطلوبة من القائمة: ({', '.join(SERVICES.keys())}). افهم القصد حتى لو وجدت أخطاء إملائية. إذا كان الكلام بعيداً عن الخدمات أو مجرد تحية أرجع {{'service': null}}. أرجع JSON فقط."},
+                {"role": "system", "content": f"أنت خبير تصنيف لعيادة أسنان. حدد الخدمة من القائمة: ({', '.join(SERVICES.keys())}). افهم القصد والأخطاء الإملائية. إذا كان مجرد سلام أو غير مفهوم أرجع {{'service': null}}. أرجع JSON فقط."},
                 {"role": "user", "content": user_text}
             ],
-            response_format={ "type": "json_object" } # تضمن لك استلام JSON سليم دائماً
+            response_format={ "type": "json_object" },
+            timeout=7 # مهلة زمنية لضمان عدم تعليق البوت
         )
         res = json.loads(completion.choices.message.content)
         
-        # التأكد أن الخدمة التي اختارها الـ AI موجودة في قائمتنا فعلاً
         if res.get("service") in SERVICES:
             return res
-        return {"service": None}
-    except:
-        # 3. في حالة فشل الـ AI (مثلاً مشكلة انترنت)، نلجأ للقواعد اليدوية كمحرك احتياطي
-        mapping = {"زراعة": "زراعة", "تبييض": "تبييض", "تبيض": "تبييض", "تقويم": "تقويم", "كشف": "كشف"}
-        for key in mapping:
-            if key in user_text: return {"service": mapping[key]}
-        print(f"OpenAI API Error: {str(e)}")
+            
+        # إذا لم يجد الـ AI خدمة، نبحث يدوياً كخيار احتياطي قبل الخروج بـ None
+        raise Exception("AI could not find service") 
+
+    except Exception as e:
+        # 3. المحرك الاحتياطي (قواعد يدوية قوية جداً لضمان النجاح غداً)
+        mapping = {
+            "تبييض": "تبييض", "تبيض": "تبييض", "ابيض": "تبييض", "أبيض": "تبييض", "نظف": "تبييض", "تنظيف": "تبييض",
+            "زراعة": "زراعة", "اركب": "زراعة", "تركيب": "زراعة",
+            "تقويم": "تقويم", "سلك": "تقويم",
+            "فينير": "فينير", "عدسات": "فينير",
+            "كشف": "كشف", "استشارة": "كشف", "فحص": "كشف",
+            "وجع": "طوارئ", "ألم": "طوارئ", "طوارئ": "طوارئ", "مكسور": "طوارئ"
+        }
+        user_text_low = user_text.lower()
+        for key, value in mapping.items():
+            if key in user_text_low:
+                return {"service": value}
+        
+        print(f"Log: {str(e)}") # طباعة الخطأ في الـ Logs للمتابعة فقط
         return {"service": None}
     
 # =========================
