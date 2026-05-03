@@ -148,16 +148,12 @@ def chat():
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
     msg_text = str(msg)
-    
-    # تحسين الرد على التحية
-    if any(x in msg_text.lower() for x in ["سلام", "اهلا", "hi", "hello", "مساء", "صباح"]):
-        return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير. ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
 
+    # التعديل الجوهري: نسأل الذكاء الاصطناعي أولاً
     if state["step"] == "ask_service":
         ai_res = ask_ai(msg_text)
         service = ai_res.get("service")
         
-        # لا ينتقل لجمع البيانات إلا لو وجد خدمة حقيقية
         if service and service in SERVICES:
             state["service"], state["step"] = service, "collect_data"
             res = SERVICES[service]
@@ -166,7 +162,12 @@ def chat():
                 "reply": f"{intro}\nبناءً على طلبك، محتاج خدمة {service}.\nالتكلفة التقريبية: {res['price']}.\n\nممكن تشرفني باسمك ورقم موبايلك لنرتب لك الموعد؟ 👇", 
                 "current_service": service
             })
-    
+
+        # إذا لم يجد الذكاء الاصطناعي خدمة، نتحقق من التحية
+        if any(x in msg_text.lower() for x in ["سلام", "اهلا", "hi", "hello", "مساء", "صباح"]):
+            return jsonify({"reply": "وعليكم السلام ورحمة الله وبركاته! نورت عيادة أوبتمم كير. ✨\nأنا سارة، كيف يمكنني مساعدتك اليوم؟", "show_services": True})
+
+    # الرد الافتراضي في حال عدم فهم أي شيء
     return jsonify({"reply": "أهلاً بك! يمكنك اختيار خدمة من الأزرار بالأسفل أو إخباري بمشكلتك وسأساعدك فوراً.", "show_services": True})
 
 
