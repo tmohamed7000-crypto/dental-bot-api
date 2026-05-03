@@ -1,27 +1,21 @@
-import os
-import re
-import json
-import sqlite3
+import os, re, json, sqlite3, requests
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
 from openai import OpenAI
-import requests
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
 # =========================
-# ENV
+# الإعدادات
 # =========================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# تصحيح رابط OpenRouter
 client = OpenAI(base_url="https://openrouter.ai", api_key=OPENROUTER_API_KEY)
 
-# إعادة الروابط الحقيقية لعيادة أوبتمم كير
 SERVICES = {
     "تبييض": {"price": "6000 جنيه", "link": "https://setmore.com"},
     "فينير": {"price": "12000 جنيه", "link": "https://setmore.com"},
@@ -33,33 +27,37 @@ SERVICES = {
     "عروسة": {"price": "4000 جنيه", "link": "https://setmore.com"}
 }
 
+# =========================
+# قاعدة بيانات مبسطة جداً
+# =========================
 def init_db():
     conn = sqlite3.connect("clients.db")
-    conn.execute("CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, service TEXT, created_at TEXT)")
+    conn.execute("DROP TABLE IF EXISTS clients") # إعادة إنشاء الجدول لتجنب تعارض الأعمدة
+    conn.execute("CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT, phone TEXT, service TEXT, created_at TEXT)")
     conn.commit()
     conn.close()
 
 init_db()
 
+# =========================
+# الذكاء الاصطناعي
+# =========================
 def ask_ai(user_text):
-    pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور"]
+    pain_keywords = ["الم", "ألم", "وجع", "تعب", "بيوجع", "درسي", "سنتي", "مكسور", "حساسية"]
     if any(x in user_text for x in pain_keywords):
         return {"service": "طوارئ"}
-    
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "صنف الطلب لخدمة واحدة: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
-                {"role": "user", "content": user_text}
-            ]
+            messages=[{"role": "system", "content": "صنف لخدمة واحدة فقط: (تبييض، فينير، زراعة، كشف، تقويم، طوارئ، ابتسامة، عروسة). أرجع JSON فقط: {'service': 'اسم الخدمة'}"},
+                      {"role": "user", "content": user_text}]
         )
-        # تصحيح طريقة الوصول للمحتوى
-        content = completion.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-        return json.loads(content)
-    except:
-        return {"service": "كشف"}
+        return json.loads(completion.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+    except: return {"service": "كشف"}
 
+# =========================
+# منطق المحادثة والحجز
+# =========================
 user_states = {}
 
 @app.route("/")
@@ -70,36 +68,40 @@ def chat():
     data = request.json
     msg = data.get("message", "")
     user_id = request.remote_addr
-    
-    # استلام الحجز النهائي من الفورم
+
+    # --- استلام الحجز من الفورم ---
     if isinstance(msg, dict):
+        name = msg.get("name", "غير معروف")
+        phone = msg.get("phone", "بدون رقم")
+        service = msg.get("service", "كشف")
+        
         try:
-            name = msg.get("name")
-            phone = msg.get("phone")
-            service = msg.get("service", "كشف") # قيمة افتراضية للأمان
-            
+            # 1. حفظ في قاعدة البيانات
             conn = sqlite3.connect("clients.db")
-            conn.execute("INSERT INTO clients (name, phone, service, status, created_at) VALUES (?,?,?,?,?)", 
-                         (name, phone, service, "جديد", datetime.now().strftime("%Y-%m-%d %H:%M")))
+            conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", 
+                         (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
             conn.commit()
             conn.close()
 
-            # إرسال تليجرام مع التأكد من تحويل الـ ID لرقم
-            if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
-                txt = f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"
-                requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
-                              json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=5)
-            
+            # 2. إرسال تليجرام (في بلوك محمي لعدم تعطيل الحجز)
+            try:
+                if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
+                    txt = f"🔥 حجز جديد\n👤 الاسم: {name}\n📞 الهاتف: {phone}\n🦷 الخدمة: {service}"
+                    requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
+                                  json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=3)
+            except: pass 
+
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
             return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً.\nيمكنك تأكيد الحجز فوراً من هنا: {link}"})
+        
         except Exception as e:
-            print(f"Error in booking: {e}") # سيظهر لك في Railway Logs سبب المشكلة
-            return jsonify({"reply": "عذراً، حصلت مشكلة بسيطة أثناء الحفظ. جرب تضغط تأكيد مرة تانية."})
+            return jsonify({"reply": f"عذراً، حدث خطأ تقني: {str(e)}"})
 
+    # --- منطق الشات العادي ---
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
     
-    if any(x in str(msg).lower() for x in ["سلام", "اهلا", "hi"]):
+    if any(x in str(msg).lower() for x in ["سلام", "اهلا", "hi", "بكام"]):
         return jsonify({"reply": "وعليكم السلام! نورت عيادة أوبتمم كير. أنا سارة، كيف يمكنني مساعدتك؟", "show_services": True})
 
     if state["step"] == "ask_service":
@@ -108,12 +110,10 @@ def chat():
         if service in SERVICES:
             state["service"] = service
             state["step"] = "collect_data"
-            res = SERVICES[service]
-            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\nالتكلفة: {res['price']}.\n\nممكن تشرفني باسمك ورقم موبايلك؟ 👇", "current_service": service})
+            return jsonify({"reply": f"سلامتك! ألف سلامة عليك. 🌹\nبناءً على كلامك، حضرتك محتاج خدمة {service}.\nالتكلفة التقريبية: {SERVICES[service]['price']}.\n\nممكن تشرفني باسمك الثلاثي ورقم موبايلك؟ 👇", "current_service": service})
     
     return jsonify({"reply": "نحن هنا لخدمتك! هل تود حجز كشف طوارئ أم تجميل؟", "show_services": True})
 
 if __name__ == "__main__":
-    # تعديل المنفذ ليتوافق مع Railway تلقائياً
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
