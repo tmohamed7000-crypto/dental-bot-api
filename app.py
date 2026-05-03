@@ -71,27 +71,30 @@ def chat():
     msg = data.get("message", "")
     user_id = request.remote_addr
     
-    if isinstance(msg, dict) and msg.get("type") == "final_booking":
+    # استلام الحجز النهائي من الفورم
+    if isinstance(msg, dict):
         try:
             name = msg.get("name")
             phone = msg.get("phone")
-            service = msg.get("service")
+            service = msg.get("service", "كشف") # قيمة افتراضية للأمان
             
             conn = sqlite3.connect("clients.db")
-            conn.execute("INSERT INTO clients (name, phone, service, created_at) VALUES (?,?,?,?)", 
-                         (name, phone, service, datetime.now().strftime("%Y-%m-%d %H:%M")))
+            conn.execute("INSERT INTO clients (name, phone, service, status, created_at) VALUES (?,?,?,?,?)", 
+                         (name, phone, service, "جديد", datetime.now().strftime("%Y-%m-%d %H:%M")))
             conn.commit()
             conn.close()
 
-            # تصحيح رابط تليجرام
+            # إرسال تليجرام مع التأكد من تحويل الـ ID لرقم
             if ADMIN_CHAT_ID and TELEGRAM_BOT_TOKEN:
+                txt = f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"
                 requests.post(f"https://telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage", 
-                              json={"chat_id": ADMIN_CHAT_ID, "text": f"🔥 حجز جديد\n👤 {name}\n📞 {phone}\n🦷 {service}"})
+                              json={"chat_id": int(ADMIN_CHAT_ID), "text": txt}, timeout=5)
             
             link = SERVICES.get(service, SERVICES["كشف"])["link"]
             return jsonify({"reply": f"تم تسجيل طلبك بنجاح يا {name}! ✅\nوسيقوم فريق الاستقبال بالتواصل معك قريباً.\nيمكنك تأكيد الحجز فوراً من هنا: {link}"})
-        except:
-            return jsonify({"reply": "عذراً، حدث خطأ في النظام. حاول مرة أخرى."})
+        except Exception as e:
+            print(f"Error in booking: {e}") # سيظهر لك في Railway Logs سبب المشكلة
+            return jsonify({"reply": "عذراً، حصلت مشكلة بسيطة أثناء الحفظ. جرب تضغط تأكيد مرة تانية."})
 
     if user_id not in user_states: user_states[user_id] = {"step": "ask_service", "service": None}
     state = user_states[user_id]
